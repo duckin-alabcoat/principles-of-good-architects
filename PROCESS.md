@@ -1,6 +1,8 @@
 # Federation participation — onboarding and ongoing flow
 
-This document is the operator's runbook for bringing an Architect into the federation and keeping it participating thereafter. Audience: the user, future operators, and the Federation Architect itself ([ADR-0003](adr/0003-federation-architect-is-a-participant.md) — Federation Architect is also a participant).
+This document is the runbook for bringing an Architect into the federation and keeping it participating thereafter. Audience: the user, future operators, and the Federation Architect itself ([ADR-0003](adr/0003-federation-architect-is-a-participant.md) — Federation Architect is also a participant).
+
+**Bootstrapping new Architects is one of the federation's three co-equal mission responsibilities** ([federation-arch.md §2](federation-arch.md), [ADR-0017](adr/0017-bootstrapping-is-a-federation-responsibility.md)) — standing up a competent Architect to run a project is a delivered outcome in its own right, not merely a precondition for feeding the curation loop. The Federation Architect is the *actor* that executes this runbook; the kit is the tooling it owns.
 
 PROCESS.md drives the [bootstrap kit](bootstrap-kit/). The kit is the templated scaffolding; this doc is the runbook that uses it.
 

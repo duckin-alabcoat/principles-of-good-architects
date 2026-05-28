@@ -31,6 +31,7 @@ See [ADR-0001](0001-use-adrs.md) for the rationale.
 | [0014](0014-existing-architect-retrofit.md) | Existing-Architect retrofit mechanism | Accepted | 2026-05-26 |
 | [0015](0015-work-package-briefs.md) | Work-package briefs as the federation parallel-work mechanism | Accepted | 2026-05-26 |
 | [0016](0016-memory-is-local.md) | Memory is local; cross-machine continuity is the session-handoff + registries job | Accepted | 2026-05-26 |
+| [0017](0017-bootstrapping-is-a-federation-responsibility.md) | Bootstrapping new Architects is a first-class federation responsibility | Accepted | 2026-05-28 |
 
 ## Pending ADRs (likely future decisions)
 
