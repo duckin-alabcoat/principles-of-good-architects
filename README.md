@@ -14,7 +14,7 @@ The Architect of this system is the **Federation Architect** — see [federation
 >
 > - **The user is referred to generically** ("the user"). Personal identifiers, account names, machine names, and paths have been replaced with placeholders.
 > - **The example systems are fabricated.** Recipe Box, Home Hub, Trail Log, Campaign Tracker, Arcade, and Plant Care (and their orchestrator agents Basil, Hearth, Cairn) are illustrative hobby projects invented to demonstrate the format — they are not anyone's real systems. Swap in your own.
-> - **The principles and habits registries are included** (`principles/master.md`, `habits/master.md`, and their history sidecars), sanitized — these are the actual distilled canon, with provenance citations genericized. The running session log has been replaced with a short stub ([session-handoff.md](session-handoff.md)); the operational `briefs/` directory and the raw `inputs/` mirrors are omitted. Everything else — the role doc, all ADRs, the bootstrap kit, the process — is the real framework.
+> - **The principles and habits registries are included** (`principles/master.md`, `habits/master.md`, and their history sidecars), sanitized — these are the actual distilled canon, with provenance citations genericized. The running session log and the user preference profile have been replaced with short stubs ([session-handoff.md](session-handoff.md), [users/user/profile.md](users/user/profile.md)); the operational `briefs/` directory and the raw `inputs/` mirrors are omitted. Everything else — the role doc, all ADRs, the bootstrap kit, the process — is the real framework.
 > - It's designed to be OS-agnostic (macOS or Linux).
 
 ## Where to start
@@ -48,12 +48,15 @@ The Architect of this system is the **Federation Architect** — see [federation
 ├── habits/                                  # universal-habits registry + history (system, per ADR-0018)
 │   ├── master.md
 │   └── master-history.md
+├── users/
+│   └── user/
+│       └── profile.md                       # empty stub — preference format only (real profile is data, omitted)
 └── specs/                                   # design specs
 
 # Data (gitignored in the real system; omitted from this public version —
 # synthesized from other systems' producer files and role docs):
 #   inputs/        mirrored producer files & role docs
-#   users/         per-user preference profiles + history
+#   users/<id>/profile-history.md   preference change history (profile.md ships as an empty stub above)
 #   architect-learnings.md   the Federation Architect's own producer file
 ```
 

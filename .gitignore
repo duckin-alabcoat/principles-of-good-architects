@@ -6,6 +6,9 @@
 inputs/
 users/
 architect-learnings.md
+# Note: users/ is data and gitignored. A single committed stub
+# (users/user/profile.md, force-added) shows the preference-profile format
+# in this public version; the real profile and its history are never committed.
 
 # OS / editor cruft
 .DS_Store
