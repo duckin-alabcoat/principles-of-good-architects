@@ -1,7 +1,7 @@
 # Bootstrap kit
 
-**Kit version:** v0.6.0
-**Last updated:** 2026-05-27
+**Kit version:** v0.6.1
+**Last updated:** 2026-05-28
 
 The bootstrap kit is the templated scaffolding that stands up a **fresh** federation-participating Architect's repo from cold. The onboarding operator (the user, or the Federation Architect on the user's behalf) copies these files into the new Architect's repo, fills in the substitution tokens per [PROCESS.md §5](../PROCESS.md), and runs the receipt-ritual inbox `mkdir` commands. After that, the new Architect has a federation-spec'd repo and can take its first session.
 
@@ -15,7 +15,7 @@ The kit is driven by [PROCESS.md](../PROCESS.md) §"Fresh-Architect onboarding s
 |---|---|
 | `README.md` | This file — kit overview, contents, open items. |
 | `claude-md-template.md` | Single-purpose Claude Code auto-load trigger. Renamed to `CLAUDE.md` at the new repo's root; tells Claude on session start to read the role doc and execute §11 session-start protocol before responding. Added in kit v0.6.0 — without it, the session-start ritual silently fails to fire on a fresh Architect (Claude Code auto-loads `CLAUDE.md`, not `<architect-id>.md`; fresh projects have no memory to compensate). |
-| `role-doc-template.md` | Full role-doc skeleton modeled on [federation-arch.md](../federation-arch.md). Top-metadata block (incl. `Data root:` per [ADR-0011](../adr/0011-data-root-config.md)), §1 Identity through §13 Open questions, References, CHANGELOG. Pre-populates the §4.1 principles table with P1–P10 (see Open-for-the user item 2). |
+| `role-doc-template.md` | Full role-doc skeleton modeled on [federation-arch.md](../federation-arch.md). Top-metadata block (incl. `Data root:` per [ADR-0011](../adr/0011-data-root-config.md)), §1 Identity through §13 Open questions, References, CHANGELOG. Pre-populates the §4.1 principles table with P1–P13 (see Open-for-the user item 2). |
 | `gitignore-template` | `.gitignore` patterns enforcing the [ADR-0007](../adr/0007-github-as-system-storage-data-excluded.md) / [ADR-0012](../adr/0012-per-architect-repo-conventions.md) data-vs-system boundary. Covers data-layer directories, OS/editor cruft, local-only working files, Claude Code transient files. |
 | `adr-readme-template.md` | ADR index template. Modeled on [adr/README.md](../adr/README.md). |
 | `adr-template.md` | Verbatim copy of the federation's [adr/template.md](../adr/template.md). Used unchanged for new Architects. |
@@ -73,6 +73,7 @@ Bumps happen in the same commit as the kit-contents change. PROCESS.md's onboard
 
 **Version history:**
 
+- **v0.6.1** (2026-05-28) — Documentation completeness fix (federation session 15). Surfaced by a "could this bootstrap an Architect on Linux?" review: the kit is OS-portable (machine-detect is `hostname`-primary, `scutil` only an optional macOS nicety; timestamps via `TZ=… date`; settings.json is git/gh/mkdir/ls/cat — no macOS-locked command), but the [PROCESS.md §5](../PROCESS.md) token table was missing ~12 tokens the templates actually use — most consequentially `<<USER_NAME>>` (used throughout `role-doc-template.md` and `claude-md-template.md` with no inline guidance), plus `<<REPO_OWNER>>`, `<<REPO_NAME>>`, `<<HABITS_TABLE>>`, `<<SYSTEM_SPECIFIC_PRINCIPLES>>`, `<<VOICE_STYLE_BULLETS>>`, the `<<EXTRA_*>>` and `<<ARCHITECT_SPECIFIC_*>>` rows. A strict find-and-replace from the table would have left unsubstituted placeholders. PROCESS.md §5 table completed. Stale counts refreshed: PROCESS.md "10 principles / 15 habits" → "13 / 21"; this README's contents-table "P1–P10" → "P1–P13" and Open-items 2–3 counts; `role-doc-template.md` CHANGELOG `0.1.0` line corrected from "10 principles (P1–P10) … v0.7.0 habits" to the current 13/21 set. Not a Linux-specific issue — would have tripped any from-the-docs bootstrap on any OS. Patch — doc-only corrections; no template behavioral change, no new tokens, no incompatible changes.
 - **v0.6.0** (2026-05-27) — Adds `claude-md-template.md` — a small Claude Code auto-load trigger that points at the role doc and instructs §11 session-start execution before first response. Fixes a structural gap discovered when Plant Care Architect's first kit-driven session (session 13 in the federation, 2026-05-27) failed to fire the session-start ritual: Claude Code auto-loads `CLAUDE.md` but not `<architect-id>.md`, and a fresh project has no memory entries to compensate, so the ritual silently no-ops on first run. PROCESS.md step 4 table gains a row for the new file. No new tokens (uses existing `<<ARCHITECT_NAME>>`, `<<ARCHITECT_ID>>`, `<<USER_NAME>>`). Minor — additive template; no incompatible template changes.
 - **v0.5.0** (2026-05-27) — `role-doc-template.md` `<<HABITS_TABLE>>` guidance updated to 21 habits (adds `no-fabricated-data` under P7). §4.1 header version stamp bumped to federation-arch.md v0.11.0. Minor — additive surface, no incompatible template changes.
 - **v0.4.0** (2026-05-27) — `role-doc-template.md` `<<HABITS_TABLE>>` guidance updated to 20 habits (adds `no-compound-bash` under P7). §4.1 header version stamp bumped to federation-arch.md v0.10.0. Minor — additive surface, no incompatible template changes.
@@ -109,14 +110,14 @@ The kit's executing session did not decide the following architectural choices; 
 
 ### 2. Pre-populated principles in the role-doc template's §4.1
 
-**Question.** Principles are universal by definition ([ADR-0008](../adr/0008-three-bucket-taxonomy.md)). A fresh Architect inherits all 10 (P1–P10) on day one. Two options:
-- Pre-populate §4.1 with the 10 current principles in the template; onboarding Architect starts already-adopted; kit version-stamps the principle set ("as of federation-arch.md v0.7.0").
+**Question.** Principles are universal by definition ([ADR-0008](../adr/0008-three-bucket-taxonomy.md)). A fresh Architect inherits all 13 (P1–P13) on day one. Two options:
+- Pre-populate §4.1 with the 13 current principles in the template; onboarding Architect starts already-adopted; kit version-stamps the principle set ("as of federation-arch.md v0.7.0").
 - Leave §4.1 empty; first session post-onboarding runs an initial retrofit per [ADR-0014](../adr/0014-existing-architect-retrofit.md) to register adoptions.
 
-**Recommendation.** **Pre-populate §4.1 with the 10 current principles** in the template, version-stamped "as of federation-arch.md v0.7.0 / principles/master.md state at <<TODAY>>." Fresh Architects are *categorically* in scope for every principle ([ADR-0008](../adr/0008-three-bucket-taxonomy.md) makes them universal). Running an initial retrofit on a fresh Architect would produce 10 "outcome B — gap-to-close" rows for principles plus N rows for universal habits, all of them trivially "adopt" — a synthetic exercise that just renders what the template could have already declared.
+**Recommendation.** **Pre-populate §4.1 with the 13 current principles** in the template, version-stamped "as of federation-arch.md v0.7.0 / principles/master.md state at <<TODAY>>." Fresh Architects are *categorically* in scope for every principle ([ADR-0008](../adr/0008-three-bucket-taxonomy.md) makes them universal). Running an initial retrofit on a fresh Architect would produce 13 "outcome B — gap-to-close" rows for principles plus N rows for universal habits, all of them trivially "adopt" — a synthetic exercise that just renders what the template could have already declared.
 
 **Reasoning.**
-- **Speed.** Onboarding session 1 starts with a working role doc rather than a backlog of 10+ adoption events.
+- **Speed.** Onboarding session 1 starts with a working role doc rather than a backlog of 13+ adoption events.
 - **Mechanism honesty.** [ADR-0014](../adr/0014-existing-architect-retrofit.md) was scoped to *existing* Architects with evolved role docs. Running it on a cold-start template is the wrong-tool-for-the-job — there is no evolved practice to reconcile against. The outcome-A vs. outcome-B distinction is meaningless when there's no role doc to walk.
 - **ADR-0008's universality argument.** Principles are *property claims* applicable to every Architect; binding them at template-render is consistent with what makes them principles.
 - **Audit trail preserved.** The template's CHANGELOG `0.1.0` entry cites the principles set's source version. If the federation accepts a new principle between template-render and onboarding, that new principle lands via a normal ongoing-retrofit receipt-ritual edit ([ADR-0014](../adr/0014-existing-architect-retrofit.md) §"Trigger model — two modes," ongoing case).
@@ -127,9 +128,9 @@ The kit's executing session did not decide the following architectural choices; 
 
 **Question.** Universal habits are case-by-case per [ADR-0008](../adr/0008-three-bucket-taxonomy.md)'s failure-mode-breadth test. Every currently-Accepted habit has already passed that test. Same two options as item 2.
 
-**Recommendation.** **Pre-populate §4.2 with all 15 currently-Accepted universal habits**, same version-stamp pattern as item 2. **Consistent with item 2.** The case-by-case rule in [ADR-0008](../adr/0008-three-bucket-taxonomy.md) gates *promotion to universal* (does the habit address a failure mode present in every Architect's context?). Once promoted, the universal scope applies. Distinguishing "promoted but not auto-adopted by new Architects" from "promoted and auto-adopted" would carve out a third bucket the taxonomy doesn't have.
+**Recommendation.** **Pre-populate §4.2 with all 21 currently-Accepted universal habits**, same version-stamp pattern as item 2. **Consistent with item 2.** The case-by-case rule in [ADR-0008](../adr/0008-three-bucket-taxonomy.md) gates *promotion to universal* (does the habit address a failure mode present in every Architect's context?). Once promoted, the universal scope applies. Distinguishing "promoted but not auto-adopted by new Architects" from "promoted and auto-adopted" would carve out a third bucket the taxonomy doesn't have.
 
-**Reasoning.** Same as item 2 — speed, mechanism honesty, taxonomy alignment. If items 2 and 3 split (one pre-populated, one not), the role-doc template becomes incoherent — §4.1 says "you've adopted these 10 principles" and §4.2 says "you've adopted nothing yet; run retrofit." That asymmetry is artificial.
+**Reasoning.** Same as item 2 — speed, mechanism honesty, taxonomy alignment. If items 2 and 3 split (one pre-populated, one not), the role-doc template becomes incoherent — §4.1 says "you've adopted these 13 principles" and §4.2 says "you've adopted nothing yet; run retrofit." That asymmetry is artificial.
 
 **Flagged alternative.** **Leave §4.2 empty.** Same argument as item 2's alternative. Accept only paired with item 2's alternative.
 

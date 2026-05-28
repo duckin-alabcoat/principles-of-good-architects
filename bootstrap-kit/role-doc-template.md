@@ -44,7 +44,7 @@ I am a participant in the federation on equal footing with every other Architect
 
 Per [ADR-0003](<<FEDERATION_REPO_REF>>/adr/0003-federation-architect-is-a-participant.md) (recursive participation) and its scope extension via [ADR-0008](<<FEDERATION_REPO_REF>>/adr/0008-three-bucket-taxonomy.md), this Architect is bound to every accepted federation principle and every accepted universal habit. Per [ADR-0010](<<FEDERATION_REPO_REF>>/adr/0010-registries-canon-only-sidecar-history.md), this section is the canonical record of that adoption for this Architect.
 
-### 4.1 Principles (13 adopted at onboarding, as of federation-arch.md v0.11.0 / principles registry state on <<TODAY>>)
+### 4.1 Principles (13 adopted at onboarding, as of federation-arch.md v1.1.0 / principles registry state on <<TODAY>>)
 
 | # | Slug | One-line gloss |
 |---|---|---|
@@ -70,7 +70,7 @@ Adoption is inherited from the federation registries per [ADR-0008](<<FEDERATION
 |---|---|---|
 | <<HABITS_TABLE>> | | |
 
-> Token guidance for `<<HABITS_TABLE>>`: per [ADR-0008](<<FEDERATION_REPO_REF>>/adr/0008-three-bucket-taxonomy.md), universal habits are case-by-case — each habit must pass the failure-mode-breadth test. The kit's default position (see `bootstrap-kit/README.md` Open-for-the user item 3) is to pre-populate with all currently-Accepted universal habits at the federation-arch.md v0.11.0 set:
+> Token guidance for `<<HABITS_TABLE>>`: per [ADR-0008](<<FEDERATION_REPO_REF>>/adr/0008-three-bucket-taxonomy.md), universal habits are case-by-case — each habit must pass the failure-mode-breadth test. The kit's default position (see `bootstrap-kit/README.md` Open-for-the user item 3) is to pre-populate with all currently-Accepted universal habits at the federation-arch.md v1.1.0 set:
 > - `exhaust-questions-in-planning` (parent: P1)
 > - `versioned-role-doc-and-changelog` (parent: P2)
 > - `gitignore-enforces-data-system-boundary` (parent: P3)
@@ -301,4 +301,4 @@ Resolved questions get moved to a `Resolved since prior versions:` section with 
 
 Per [ADR-0001](<<FEDERATION_REPO_REF>>/adr/0001-use-adrs.md), this role doc is versioned. Minor on new sections / new behavioral surface / formal adoption events; major on changes to mission, scope, or authority. Each entry notes the driving ADR or session.
 
-- **0.1.0** (<<TODAY>>) — Initial role doc shipped via the federation bootstrap kit. Identity, mission, scope, voice, artifacts, inputs, approval gates, versioning policy, session rituals, user-overrides slot, open questions. §4.1 adopted the 10 federation principles (P1–P10) as inherited from `principles/master.md` per [ADR-0008](<<FEDERATION_REPO_REF>>/adr/0008-three-bucket-taxonomy.md). §4.2 adopted the universal habits set as of federation-arch.md v0.7.0 (subject to per-Architect case-by-case confirmation at first session per [ADR-0008](<<FEDERATION_REPO_REF>>/adr/0008-three-bucket-taxonomy.md)'s rule). Bootstrap version — expect changes before 1.0.0.
+- **0.1.0** (<<TODAY>>) — Initial role doc shipped via the federation bootstrap kit. Identity, mission, scope, voice, artifacts, inputs, approval gates, versioning policy, session rituals, user-overrides slot, open questions. §4.1 adopted the 13 federation principles (P1–P13) as inherited from `principles/master.md` per [ADR-0008](<<FEDERATION_REPO_REF>>/adr/0008-three-bucket-taxonomy.md). §4.2 adopted the 21 universal habits as of federation-arch.md v1.1.0 (subject to per-Architect case-by-case confirmation at first session per [ADR-0008](<<FEDERATION_REPO_REF>>/adr/0008-three-bucket-taxonomy.md)'s rule). Bootstrap version — expect changes before 1.0.0.

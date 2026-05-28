@@ -60,7 +60,7 @@ Create the empty repo; clone it locally. The operator's clone path becomes the s
 
 ### 4. Copy kit files into the new repo
 
-The bootstrap kit lives at [`bootstrap-kit/`](bootstrap-kit/) in this (federation) repo. Per the kit's currently-shipped version (`Kit version: v0.6.0`), copy:
+The bootstrap kit lives at [`bootstrap-kit/`](bootstrap-kit/) in this (federation) repo. Per the kit's currently-shipped version (`Kit version: v0.6.1`), copy:
 
 | Kit file | Destination in new repo | Rename |
 |---|---|---|
@@ -76,7 +76,7 @@ The bootstrap kit lives at [`bootstrap-kit/`](bootstrap-kit/) in this (federatio
 
 Skip `bootstrap-kit/README.md` itself — that's the kit's own doc, not a deliverable into the new repo.
 
-Record the kit version used (`v0.6.0` at time of writing) — the first session-handoff entry in the new repo cites it.
+Record the kit version used (`v0.6.1` at time of writing) — the first session-handoff entry in the new repo cites it.
 
 **Why `CLAUDE.md` matters:** Claude Code auto-loads `CLAUDE.md` (and not `<architect-id>.md`) as project context at session start. Without `CLAUDE.md`, the role doc never reaches the Architect's first turn and the §11 session-start protocol silently no-ops — the Architect responds as a generic Claude Code instance with no identity, no git refresh, no stamp. This was discovered when Plant Care Architect's first kit-driven session failed in exactly this mode (federation session 13, 2026-05-27). Kit v0.6.0 added `claude-md-template.md` to close the gap.
 
@@ -106,8 +106,16 @@ Templates use `<<TOKEN_NAME>>` markers. Replace each across all copied files:
 | `<<MISSION_PROSE>>` | Free-form mission paragraphs (per role-doc inline guidance) | (operator writes) |
 | `<<SCOPE_DO_BULLETS>>` | Architect-specific scope bullets | (operator writes) |
 | `<<SCOPE_DONT_BULLETS>>` | Architect-specific don't-do bullets | (operator writes) |
+| `<<USER_NAME>>` | Name used to address the bound user in the role doc and `CLAUDE.md` | `the user` |
+| `<<REPO_OWNER>>` | GitHub account/org that owns the new Architect's repo | `<your-github-account>` |
+| `<<REPO_NAME>>` | The new Architect's repo name | `home-hub` |
+| `<<HABITS_TABLE>>` | §4.2 universal-habits rows | (operator writes — see `role-doc-template.md` inline guidance) |
+| `<<SYSTEM_SPECIFIC_PRINCIPLES>>` | §5 system-specific operating principles | (operator writes — inline guidance) |
+| `<<VOICE_STYLE_BULLETS>>` | §6 voice & style bullets | (operator writes — inline guidance) |
+| `<<EXTRA_ARTIFACT_ROWS>>`, `<<EXTRA_INPUT_ROWS>>`, `<<EXTRA_GATE_BULLETS>>` | Optional extra rows in §7 / §8 / §9 | (operator writes, or delete the row — inline guidance) |
+| `<<ARCHITECT_SPECIFIC_NEXT_BULLETS>>`, `<<ARCHITECT_SPECIFIC_OPEN_QUESTIONS>>`, `<<ARCHITECT_SPECIFIC_PENDING>>` | Optional rows in the session-handoff bootstrap entry | (operator writes, or delete — inline guidance) |
 
-Tokens marked "(operator writes)" or "(template-resolved)" require human content, not mechanical substitution — the role-doc template carries inline guidance blocks for each. Delete the guidance blocks after writing.
+Tokens marked "(operator writes)" or "(template-resolved)" require human content, not mechanical substitution — the role-doc template carries inline guidance blocks for each. Delete the guidance blocks after writing. The mechanical tokens above (`<<USER_NAME>>`, `<<REPO_OWNER>>`, `<<REPO_NAME>>`) are simple find-and-replace.
 
 ### 6. Create the receipt-ritual inbox under data root
 
@@ -145,7 +153,7 @@ After step 8, the Architect is federation-bound and operational.
 
 ## What the kit installs
 
-See [`bootstrap-kit/README.md`](bootstrap-kit/README.md) for the canonical list. High level: role doc, gitignore, ADR scaffolding, session-handoff scaffold, producer file scaffold, Claude Code settings, repo README. Pre-populated with the 10 federation principles and 15 universal habits as of the kit's shipped version.
+See [`bootstrap-kit/README.md`](bootstrap-kit/README.md) for the canonical list. High level: role doc, gitignore, ADR scaffolding, session-handoff scaffold, producer file scaffold, Claude Code settings, repo README. Pre-populated with the 13 federation principles and 21 universal habits as of the kit's shipped version.
 
 What the kit does NOT install:
 
