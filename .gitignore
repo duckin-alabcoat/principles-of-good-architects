@@ -1,11 +1,9 @@
 # Data — never committed. See ADR-0007.
-# These directories and files hold content drawn from or synthesized from
-# other systems' producer files and role docs. They are operational
-# substrate for the federation, not federation infrastructure.
+# Inputs (mirrored copies of other systems' files) and producer observations
+# are data. The distilled registries (principles/, habits/) are SYSTEM and
+# tracked in git per ADR-0018 — adopted canon is part of the system, not data.
 
 inputs/
-principles/
-habits/
 users/
 architect-learnings.md
 
