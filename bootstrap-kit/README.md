@@ -1,6 +1,6 @@
 # Bootstrap kit
 
-**Kit version:** v0.6.1
+**Kit version:** v0.6.2
 **Last updated:** 2026-05-28
 
 The bootstrap kit is the templated scaffolding that stands up a **fresh** federation-participating Architect's repo from cold. The onboarding operator (the user, or the Federation Architect on the user's behalf) copies these files into the new Architect's repo, fills in the substitution tokens per [PROCESS.md §5](../PROCESS.md), and runs the receipt-ritual inbox `mkdir` commands. After that, the new Architect has a federation-spec'd repo and can take its first session.
@@ -44,7 +44,7 @@ PROCESS.md owns the runbook. The operator follows PROCESS.md §"Fresh-Architect 
 7. Initial commit of the new Architect's repo (per ADR-0012 blanket-maintenance authority).
 8. Register the new Architect with the Federation Architect (Federation Architect mirrors the role doc into `inputs/` and confirms federation binding).
 
-The kit is not interactive. The operator does the find-and-replace; the kit does not auto-substitute.
+The substitution is normally done *by the executing agent* — Claude, running as the Federation Architect — which gathers the token values from the operator (asking for anything it can't safely infer) and applies them. A human can do the find-and-replace by hand as a fallback, but the kit is designed to be agent-driven; the kit files themselves do not auto-substitute.
 
 ## Token convention
 
@@ -73,6 +73,7 @@ Bumps happen in the same commit as the kit-contents change. PROCESS.md's onboard
 
 **Version history:**
 
+- **v0.6.2** (2026-05-28) — Onboarding reframed agent-driven (federation session 15). The runbook is now explicitly executed *by Claude* (running as the Federation Architect), which gathers token values from the operator via a short intake and applies them — rather than the operator hand-doing find-and-replace. [PROCESS.md](../PROCESS.md) §"Fresh-Architect onboarding steps" gains a "How to run this — agent-driven by default" note; step 5 retitled "Fill in the template tokens" and rewritten to instruct the agent to *ask* for values it can't safely infer (data-root path, user's name, timezone) rather than guess. This README's "How PROCESS.md drives the kit" line corrected (was "the operator does the find-and-replace; the kit does not auto-substitute" — which under-sold the agent path and made manual substitution sound mandatory). Manual remains a documented fallback. Patch — doc-only; no template or token changes.
 - **v0.6.1** (2026-05-28) — Documentation completeness fix (federation session 15). Surfaced by a "could this bootstrap an Architect on Linux?" review: the kit is OS-portable (machine-detect is `hostname`-primary, `scutil` only an optional macOS nicety; timestamps via `TZ=… date`; settings.json is git/gh/mkdir/ls/cat — no macOS-locked command), but the [PROCESS.md §5](../PROCESS.md) token table was missing ~12 tokens the templates actually use — most consequentially `<<USER_NAME>>` (used throughout `role-doc-template.md` and `claude-md-template.md` with no inline guidance), plus `<<REPO_OWNER>>`, `<<REPO_NAME>>`, `<<HABITS_TABLE>>`, `<<SYSTEM_SPECIFIC_PRINCIPLES>>`, `<<VOICE_STYLE_BULLETS>>`, the `<<EXTRA_*>>` and `<<ARCHITECT_SPECIFIC_*>>` rows. A strict find-and-replace from the table would have left unsubstituted placeholders. PROCESS.md §5 table completed. Stale counts refreshed: PROCESS.md "10 principles / 15 habits" → "13 / 21"; this README's contents-table "P1–P10" → "P1–P13" and Open-items 2–3 counts; `role-doc-template.md` CHANGELOG `0.1.0` line corrected from "10 principles (P1–P10) … v0.7.0 habits" to the current 13/21 set. Not a Linux-specific issue — would have tripped any from-the-docs bootstrap on any OS. Patch — doc-only corrections; no template behavioral change, no new tokens, no incompatible changes.
 - **v0.6.0** (2026-05-27) — Adds `claude-md-template.md` — a small Claude Code auto-load trigger that points at the role doc and instructs §11 session-start execution before first response. Fixes a structural gap discovered when Plant Care Architect's first kit-driven session (session 13 in the federation, 2026-05-27) failed to fire the session-start ritual: Claude Code auto-loads `CLAUDE.md` but not `<architect-id>.md`, and a fresh project has no memory entries to compensate, so the ritual silently no-ops on first run. PROCESS.md step 4 table gains a row for the new file. No new tokens (uses existing `<<ARCHITECT_NAME>>`, `<<ARCHITECT_ID>>`, `<<USER_NAME>>`). Minor — additive template; no incompatible template changes.
 - **v0.5.0** (2026-05-27) — `role-doc-template.md` `<<HABITS_TABLE>>` guidance updated to 21 habits (adds `no-fabricated-data` under P7). §4.1 header version stamp bumped to federation-arch.md v0.11.0. Minor — additive surface, no incompatible template changes.

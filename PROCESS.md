@@ -19,6 +19,8 @@ If unsure which path applies: if the candidate Architect has *any* committed rol
 
 The runbook. Follow in order. Each step lands a discrete piece of state.
 
+**How to run this — agent-driven by default.** This runbook is normally executed *by Claude*, not by hand. Open this federation repo (or a clone) in Claude Code and ask it to onboard a new Architect for your project: Claude loads the Federation Architect role (whose mission includes bootstrapping per [ADR-0017](adr/0017-bootstrapping-is-a-federation-responsibility.md)), works through the steps below, **asks you for the values it needs** (step 5), and does the file copying and token substitution itself. The steps are written so a human *could* run them manually, but the agent-driven path is the default — prefer it.
+
 ### 1. Assign IDs
 
 Per [ADR-0006](adr/0006-naming-convention-corrected.md) (naming convention — 4-slot):
@@ -80,9 +82,9 @@ Record the kit version used (`v0.6.1` at time of writing) — the first session-
 
 **Why `CLAUDE.md` matters:** Claude Code auto-loads `CLAUDE.md` (and not `<architect-id>.md`) as project context at session start. Without `CLAUDE.md`, the role doc never reaches the Architect's first turn and the §11 session-start protocol silently no-ops — the Architect responds as a generic Claude Code instance with no identity, no git refresh, no stamp. This was discovered when Plant Care Architect's first kit-driven session failed in exactly this mode (federation session 13, 2026-05-27). Kit v0.6.0 added `claude-md-template.md` to close the gap.
 
-### 5. Find-and-replace token substitution
+### 5. Fill in the template tokens
 
-Templates use `<<TOKEN_NAME>>` markers. Replace each across all copied files:
+Templates use `<<TOKEN_NAME>>` markers. **The executing agent gathers these values and applies them across all copied files** — running a short intake with the operator: confirm or ask for each mechanical token value in one round, then draft the "operator writes" tokens collaboratively. **Don't guess** at values like the data-root path, the user's name, or the timezone — ask. (A human can do the substitution by hand as a fallback, but the agent-driven intake is the default.) The table is the checklist of what to gather:
 
 | Token | Value | Example |
 |---|---|---|
