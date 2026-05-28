@@ -1,0 +1,26 @@
+# Data — never committed. See ADR-0007.
+# These directories and files hold content drawn from or synthesized from
+# other systems' producer files and role docs. They are operational
+# substrate for the federation, not federation infrastructure.
+
+inputs/
+principles/
+habits/
+users/
+architect-learnings.md
+
+# OS / editor cruft
+.DS_Store
+*.swp
+*.swo
+*~
+
+# Local-only working files
+*.local.md
+scratch/
+
+# Claude Code: machine-local settings overrides + transient agent worktrees.
+# Project settings (.claude/settings.json) are system and committed; the
+# files below are user-machine-specific or transient and must not be.
+.claude/settings.local.json
+.claude/worktrees/

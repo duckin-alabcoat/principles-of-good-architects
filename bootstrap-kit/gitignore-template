@@ -1,0 +1,35 @@
+# Data — never committed. See ADR-0007 (federation prototype) and
+# ADR-0012 (per-Architect repo conventions) in the federation repo.
+#
+# These directories and files hold content drawn from or synthesized from
+# other systems' producer files and role docs, or this Architect's own
+# producer-side learnings (data per ADR-0012). They live under the data
+# root (per ADR-0009 / ADR-0011), not in the system repo.
+
+inputs/
+principles/
+habits/
+users/
+architect-learnings.md
+
+# Receipt-ritual artifacts live under the data root, but if any path under
+# the repo happens to be the data root or a symlink to it, exclude the
+# inbox tree explicitly.
+proposed-edits/
+retrofit-reports/
+
+# OS / editor cruft
+.DS_Store
+*.swp
+*.swo
+*~
+
+# Local-only working files
+*.local.md
+scratch/
+
+# Claude Code: machine-local settings overrides + transient agent worktrees.
+# Project settings (.claude/settings.json) are system and committed; the
+# files below are user-machine-specific or transient and must not be.
+.claude/settings.local.json
+.claude/worktrees/
