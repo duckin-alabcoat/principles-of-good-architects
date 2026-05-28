@@ -84,7 +84,7 @@ Record the kit version used (`v0.6.1` at time of writing) — the first session-
 
 ### 5. Fill in the template tokens
 
-Templates use `<<TOKEN_NAME>>` markers. **The executing agent gathers these values and applies them across all copied files** — running a short intake with the operator: confirm or ask for each mechanical token value in one round, then draft the "operator writes" tokens collaboratively. **Don't guess** at values like the data-root path, the user's name, or the timezone — ask. (A human can do the substitution by hand as a fallback, but the agent-driven intake is the default.) The table is the checklist of what to gather:
+Templates use `<<TOKEN_NAME>>` markers. **The executing agent gathers these values and applies them across all copied files** — running a short intake with the operator: confirm or ask for each value in one round, then draft the "operator writes" tokens collaboratively. **Auto-detect what the system already knows** and don't ask for it: the timezone from the system clock (`date +%Z` for the label, the system zone for the IANA name) and the machine label via `hostname` — the same way the session rituals do. **Only ask about genuine choices** — the project/architect naming, the data-root path (where files should live), and how to address the user. (A human can do the substitution by hand as a fallback, but the agent-driven intake is the default.) The table is the checklist of what to gather:
 
 | Token | Value | Example |
 |---|---|---|
