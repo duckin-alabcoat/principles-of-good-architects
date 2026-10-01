@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- A PARTIAL, and deliberately NOT `deploy/*.plist.template`.
+
+     It carries no ProgramArguments and no WorkingDirectory: install-mail-worker.py loads
+     it by explicit path and supplies both, plus the interval and log paths, from external
+     config at install time. It is not a unit anyone can boot as it stands.
+
+     It also installs under the POLLER's label (install-mail-worker.py LABEL), because the
+     worker REPLACES the poller rather than running beside it; the displaced definition
+     is kept as `.plist.pre-mail-worker`.
+
+     Under its old name (`com.federation.mail-worker.plist.template`) it matched the glob
+     in tests/test_deploy_sealed_root.py and tests/test_deploy_self.py, which require every
+     `deploy/*.plist.template` to declare `__FED_ROOT__` as its WorkingDirectory and to be
+     named for a label listed in deploy.json's `units`. Neither is true of a fragment, and
+     the fix those guards appear to ask for is a trap: adding `com.federation.mail-worker`
+     to `units` would make the contract name a launchd label nothing answers to, and
+     `cutover_state` reads `launchctl print` per unit, so it would read as "not loaded"
+     forever instead of as an error. Reconciling the name with the label, or retiring the
+     poller label outright, belongs to WI-0366.
+
+     Background user-domain lifetime and post-reboot operation require host evidence. -->
+<plist version="1.0"><dict>
+    <key>Label</key><string>com.federation.mail-poller</string>
+    <key>LimitLoadToSessionType</key><string>Background</string>
+    <key>ProcessType</key><string>Background</string>
+    <key>RunAtLoad</key><true/>
+    <key>EnvironmentVariables</key><dict>
+        <key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <key>PYTHONUNBUFFERED</key><string>1</string>
+        <key>PYTHONDONTWRITEBYTECODE</key><string>1</string>
+        <key>GIT_TERMINAL_PROMPT</key><string>0</string>
+    </dict>
+</dict></plist>

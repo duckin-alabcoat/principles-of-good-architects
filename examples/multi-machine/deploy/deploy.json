@@ -1,0 +1,20 @@
+{
+  "//": "FICTIONAL EXAMPLE. The deploy contract of one project, example-app. It lives in that project's repo and is read from the tag being deployed. The schema is deploy/contract.schema.json.",
+  "contract_version": 1,
+  "system": "example-app",
+  "units": ["org.example.example-app.server"],
+  "restart": "kickstart",
+  "deps": {
+    "kind": "none"
+  },
+  "smoke": {
+    "cmd": ["python3", "-m", "example_app", "--self-test"],
+    "timeout_seconds": 60
+  },
+  "verify": {
+    "cmd": ["python3", "-m", "example_app.check", "--live"],
+    "timeout_seconds": 60,
+    "settle_seconds": 5
+  },
+  "notes": "Fictional. Illustrates the shape of a contract, not a real service."
+}

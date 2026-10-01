@@ -1,0 +1,16 @@
+{
+  "//": "System-specific config for session.py — the ONE shared session-ritual harness (ADR-0020 + the ADR-0022 code channel). session.py is identical across the federation and every participating Architect; only THIS file differs per system. The script is copied verbatim from the federation repo at onboarding (PROCESS.md copy step) — do not fork it. Fill the <<TOKENS>> below at install time. check-bash needs none of these values and tolerates the file being absent.",
+  "architect_name": "<<ARCHITECT_NAME>>",
+  "architect_id": "<<ARCHITECT_ID>>",
+  "user_name": "<<USER_NAME>>",
+  "role_doc": "<<ARCHITECT_ID>>.md",
+  "handoff": "session-handoff.md",
+  "timezone": "<<TIMEZONE_LONG>>",
+  "inbox": "proposed-edits/<<ARCHITECT_ID>>/pending",
+  "machine_map": <<MACHINE_MAP>>,
+  "//interaction": "P17 ask-in-prose-not-pickers, enforced by the check-question hook. The picker ban is ON by default: a picker narrows the answer to the options the agent thought of, and the user loses the chance to say what it did not anticipate. To allow pickers in this repo, set pickers to \"allow\". Any other value, or no value, keeps the ban.",
+  "interaction": {"pickers": "deny"},
+  "//voice": "How the agent talks. terse: short, plain answers (true) or full-length (false). emoji: allowed (true) or not (false). questions: \"decide-and-record\" (decide mechanics yourself, record the call for later review, ask only about direction) or \"recommend-then-confirm\" (recommend, then wait for a yes). A missing or invalid field falls back to the default shown here. Surfaced in one line at session start.",
+  "voice": {"terse": true, "emoji": false, "questions": "decide-and-record"},
+  "//resident_runtime_note": "ONLY if this system's repo root is (or will be) owned by another agent with its own root CLAUDE.md (a resident agent): add two REAL keys by hand after bootstrap, do not leave them for later discovery. settings_path = where the federation pushes generated settings, off that agent's root .claude/settings.json (e.g. \"architect/.claude/settings.json\"). pad_dir = the Architect's own launch home, a sibling directory OUTSIDE the persona's CLAUDE.md load path (e.g. \"../architect\") (ADR-0071). See PROCESS.md step 5. Do NOT add these keys with placeholder values for an ordinary (non-resident) system — a declared pad_dir changes how standard_check.py and adopt-runner.py treat this system's launch surface."
+}

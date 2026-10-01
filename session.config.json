@@ -1,0 +1,241 @@
+{
+  "//": "The public copy of this system's session config. The operator's own values (time zone, machine names, profile path) are replaced and the per-key notes are withheld; the ADRs each key cites carry the reasoning.",
+  "architect_name": "Federation Architect",
+  "architect_id": "federation-arch",
+  "user_name": "the operator",
+  "role_doc": "federation-arch.md",
+  "changelog_doc": "federation-arch-CHANGELOG.md",
+  "handoff": "session-handoff.md",
+  "timezone": "UTC",
+  "inbox": "proposed-edits/federation-arch/pending",
+  "user_profile": "users/operator/profile.md",
+  "interaction": {
+    "pickers": "deny"
+  },
+  "branch_sessions": false,
+  "interpreter": "/usr/bin/python3",
+  "gate": [
+    "python3 session.py wi-check",
+    "python3 curate/run_suite.py",
+    "python3 curate/distill.py --check",
+    "python3 curate/standardize.py --check",
+    "python3 curate/gen_settings.py --check",
+    "python3 curate/check_substrate_docs.py --check",
+    "python3 curate/check_citations.py --check",
+    "python3 curate/check_canon_budget.py --check"
+  ],
+  "machine_map": {
+    "example-laptop": "Laptop",
+    "example-runner": "Runner",
+    "example-dev": "DevBox"
+  },
+  "residency": {
+    "process": "Runner",
+    "data": null
+  },
+  "attach_terminal": "auto",
+  "attach_transport": "mosh",
+  "attach_host": "",
+  "attach_raise": "activate",
+  "attach_raise_after": 0,
+  "settings_extras": {
+    "feedbackDrafts": "off",
+    "modelProposedGoals": "disabled",
+    "allow": [
+      "Bash(python3 -m pytest:*)",
+      "Bash(python3 -m pytest *)",
+      "Bash(python3 session.py:*)",
+      "Bash(python3 session.py *)",
+      "Bash(python3 curate/*)",
+      "Bash(python3 deploy/runner.py:*)",
+      "Bash(python3 deploy/runner.py *)",
+      "Bash(python3 deploy/*)",
+      "Bash(poga deploy:*)",
+      "Bash(poga deploy *)",
+      "Bash(./poga deploy:*)",
+      "Bash(./poga deploy *)",
+      "Bash(launchctl list:*)",
+      "Bash(launchctl list *)",
+      "Bash(launchctl print:*)",
+      "Bash(launchctl print *)",
+      "Bash(launchctl load:*)",
+      "Bash(launchctl load *)",
+      "Bash(launchctl unload:*)",
+      "Bash(launchctl unload *)",
+      "Bash(launchctl bootstrap:*)",
+      "Bash(launchctl bootstrap *)",
+      "Bash(launchctl bootout:*)",
+      "Bash(launchctl bootout *)",
+      "Bash(launchctl kickstart:*)",
+      "Bash(launchctl kickstart *)",
+      "Bash(launchctl enable:*)",
+      "Bash(launchctl disable:*)",
+      "Bash(python3 tests/*)",
+      "Bash(jq:*)",
+      "Bash(jq *)",
+      "Bash(cp:*)",
+      "Bash(cp *)",
+      "Bash(mv:*)",
+      "Bash(mv *)",
+      "Edit(**)",
+      "Write(**)",
+      "Bash(poga work status:*)",
+      "Bash(poga work status *)",
+      "Bash(./poga work status:*)",
+      "Bash(./poga work status *)",
+      "Bash(poga work edit:*)",
+      "Bash(poga work edit *)",
+      "Bash(./poga work edit:*)",
+      "Bash(./poga work edit *)",
+      "Bash(poga work move:*)",
+      "Bash(poga work move *)",
+      "Bash(./poga work move:*)",
+      "Bash(./poga work move *)",
+      "Bash(poga dispatch:*)",
+      "Bash(poga dispatch *)",
+      "Bash(./poga dispatch:*)",
+      "Bash(./poga dispatch *)"
+    ],
+    "deny": [],
+    "hooks": {
+      "SessionStart": [
+        {
+          "matcher": "startup",
+          "hooks": [
+            {
+              "type": "command",
+              "command": "python3 \"$CLAUDE_PROJECT_DIR/curate/gather.py\" --status"
+            }
+          ]
+        },
+        {
+          "matcher": "startup",
+          "hooks": [
+            {
+              "type": "command",
+              "command": "python3 \"$CLAUDE_PROJECT_DIR/curate/reconcile.py\" --status"
+            }
+          ]
+        },
+        {
+          "matcher": "startup",
+          "hooks": [
+            {
+              "type": "command",
+              "command": "python3 \"$CLAUDE_PROJECT_DIR/curate/standard_version.py\" --fleet-status"
+            }
+          ]
+        },
+        {
+          "matcher": "startup",
+          "hooks": [
+            {
+              "type": "command",
+              "command": "python3 \"$CLAUDE_PROJECT_DIR/curate/metrics.py\" --status"
+            }
+          ]
+        },
+        {
+          "matcher": "startup",
+          "hooks": [
+            {
+              "type": "command",
+              "command": "python3 \"$CLAUDE_PROJECT_DIR/curate/gen_registry.py\" --status"
+            }
+          ]
+        },
+        {
+          "matcher": "startup",
+          "hooks": [
+            {
+              "type": "command",
+              "command": "python3 \"$CLAUDE_PROJECT_DIR/session.py\" inbox-check --status"
+            }
+          ]
+        },
+        {
+          "matcher": "startup",
+          "hooks": [
+            {
+              "type": "command",
+              "command": "python3 \"$CLAUDE_PROJECT_DIR/curate/deliver.py\" --audit --status"
+            }
+          ]
+        },
+        {
+          "matcher": "startup",
+          "hooks": [
+            {
+              "type": "command",
+              "command": "python3 \"$CLAUDE_PROJECT_DIR/curate/gen_indexes.py\" --status"
+            }
+          ]
+        },
+        {
+          "hooks": [
+            {
+              "type": "command",
+              "command": "python3 \"$CLAUDE_PROJECT_DIR/session.py\" release-list --status"
+            }
+          ]
+        },
+        {
+          "matcher": "startup",
+          "hooks": [
+            {
+              "type": "command",
+              "command": "python3 \"$CLAUDE_PROJECT_DIR/curate/check_substrate_docs.py\" --status"
+            }
+          ]
+        },
+        {
+          "matcher": "startup",
+          "hooks": [
+            {
+              "type": "command",
+              "command": "python3 \"$CLAUDE_PROJECT_DIR/curate/check_citations.py\" --status"
+            }
+          ]
+        },
+        {
+          "matcher": "startup",
+          "hooks": [
+            {
+              "type": "command",
+              "command": "python3 \"$CLAUDE_PROJECT_DIR/curate/token_ledger.py\" --status"
+            }
+          ]
+        },
+        {
+          "matcher": "startup",
+          "hooks": [
+            {
+              "type": "command",
+              "command": "python3 \"$CLAUDE_PROJECT_DIR/curate/finish_line.py\" --status"
+            }
+          ]
+        }
+      ],
+      "SessionEnd": [
+        {
+          "hooks": [
+            {
+              "type": "command",
+              "command": "python3 \"$CLAUDE_PROJECT_DIR/curate/mail-poller.py\" --quiet"
+            }
+          ]
+        }
+      ],
+      "Stop": [
+        {
+          "hooks": [
+            {
+              "type": "command",
+              "command": "python3 \"$CLAUDE_PROJECT_DIR/curate/check_reply.py\""
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "_note": "Per-system cadence expectations. Parked systems are staleness-exempt; a system not listed inherits the defaults.",
+  "defaults": {
+    "cadence_days": 7
+  },
+  "systems": {
+    "federation": {
+      "cadence_days": 14,
+      "parked": false
+    }
+  }
+}
