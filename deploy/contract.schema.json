@@ -1,0 +1,214 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/duckin-alabcoat/principles-of-good-architects/deploy/contract.schema.json",
+  "title": "Deploy contract (deploy/deploy.json)",
+  "description": "Per ADR-0103 D5. Lives in the DEPLOYED repo at deploy/deploy.json and is read FROM THE TAG BEING DEPLOYED, never from the working tree — a release that changes how it must be deployed carries that change in the same commit. The Runner-side runner is generic; everything system-specific is here.",
+  "type": "object",
+  "required": [
+    "system",
+    "contract_version"
+  ],
+  "patternProperties": {
+    "^//": {
+      "//": "A documentation key. Ignored by the runner and permitted at every object in this schema, because the contract is read FROM THE TAG and therefore cannot be edited after release: a schema that forbids a comment key strands every already-tagged system that used one."
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "contract_version": {
+      "type": "integer",
+      "const": 1,
+      "description": "Schema generation. The runner refuses a contract_version it does not know rather than guessing which fields it can ignore."
+    },
+    "system": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$",
+      "description": "System id, kebab (ADR-0006 naming). MUST match the directory the runner deploys into; a mismatch is refused, because a contract that names another system is either a bad copy-paste or a repo being deployed as something it is not."
+    },
+    "units": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "launchd LABELS this system owns — the <key>Label</key> value, NEVER the plist filename. The two differ in practice (one member's com.<member>.plist holds label com.<member>.<job>), and a runner that bootstraps a filename silently restarts nothing. An empty list is legitimate and means 'deploying this changes files, not processes' (a CLI, a library) — it is not the same as 'unknown'."
+    },
+    "restart": {
+      "enum": [
+        "kickstart",
+        "reload",
+        "none"
+      ],
+      "default": "kickstart",
+      "description": "What a deploy has to DO to the units for the new code to be the code that runs. `kickstart` restarts a loaded service now (`launchctl kickstart -k`) — correct for an always-on daemon. `reload` boots the unit out and back in, for a plist whose own contents changed. `none` is for a SCHEDULED one-shot: launchd re-execs the program at each fire, so the next fire already runs the new tag, and kickstarting it would instead fire the job at an arbitrary hour — which for a job whose timing is its point means running it at 3am. `none` is a real deployment strategy, not a way of skipping the step.",
+      "type": "string"
+    },
+    "deps": {
+      "type": "object",
+      "patternProperties": {
+        "^//": {
+          "//": "A documentation key. Ignored by the runner and permitted at every object in this schema, because the contract is read FROM THE TAG and therefore cannot be edited after release: a schema that forbids a comment key strands every already-tagged system that used one."
+        }
+      },
+      "additionalProperties": false,
+      "description": "How to materialize the runtime environment in the deploy tree. Offline-safe and pinned wherever the tool supports it.",
+      "properties": {
+        "kind": {
+          "enum": [
+            "none",
+            "uv",
+            "flox",
+            "npm",
+            "pip"
+          ],
+          "description": "none = the tag is runnable as checked out (stdlib only, or an env owned elsewhere)."
+        },
+        "args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Extra arguments appended to the sync command."
+        },
+        "timeout_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 600
+        }
+      },
+      "required": [
+        "kind"
+      ]
+    },
+    "state": {
+      "type": "array",
+      "default": [],
+      "description": "Repo-relative paths that are gitignored but must EXIST in the deploy tree for the system to run. A tag checkout never touches ignored files, so these survive every deploy and rollback once present; the runner's only job is to SEED them on the first deploy, by COPYING. It never moves and never overwrites an existing path (ADR-0103 D3). NOTE WHAT IS NOT HERE: the path to copy FROM. That is machine-shaped, and this file is tracked in the system's own repo — a Runner path committed here would be WI-0132's defect wearing a new hat. Seed sources live in the deploying machine's gitignored deploy/seed-paths.local.json.",
+      "items": {
+        "oneOf": [
+          {
+            "type": "string",
+            "description": "THE PRE-OBJECT FORM, still accepted: a bare string is the repo-relative path, equivalent to {\"path\": <string>, \"required\": false}. Kept because a contract is read from the tag and cannot be edited after release — an already-cut member release carries this form, and dropping it strands that release rather than correcting it (WI-0358). The runner normalises it to the object form at read time, so nothing downstream sees two shapes."
+          },
+          {
+            "type": "object",
+            "required": [
+              "path"
+            ],
+            "patternProperties": {
+              "^//": {
+                "//": "A documentation key. Ignored by the runner and permitted at every object in this schema, because the contract is read FROM THE TAG and therefore cannot be edited after release: a schema that forbids a comment key strands every already-tagged system that used one."
+              }
+            },
+            "additionalProperties": false,
+            "properties": {
+              "path": {
+                "type": "string",
+                "description": "Repo-relative path in the deploy tree."
+              },
+              "required": {
+                "type": "boolean",
+                "default": false,
+                "description": "true = the deploy fails before anything is restarted if this path is absent after seeding. Use for state the system cannot start without; leave false for caches."
+              }
+            }
+          }
+        ]
+      }
+    },
+    "smoke": {
+      "type": "object",
+      "patternProperties": {
+        "^//": {
+          "//": "A documentation key. Ignored by the runner and permitted at every object in this schema, because the contract is read FROM THE TAG and therefore cannot be edited after release: a schema that forbids a comment key strands every already-tagged system that used one."
+        }
+      },
+      "additionalProperties": false,
+      "description": "A fast check that must exit 0 BEFORE any unit is restarted. This is the gate that makes a bad tag a non-event: it runs against the new tree while the OLD version is still serving, so a failure costs nothing but a rollback of files nobody was reading yet.",
+      "properties": {
+        "cmd": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "timeout_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 120
+        }
+      },
+      "required": [
+        "cmd"
+      ]
+    },
+    "verify": {
+      "type": "object",
+      "patternProperties": {
+        "^//": {
+          "//": "A documentation key. Ignored by the runner and permitted at every object in this schema, because the contract is read FROM THE TAG and therefore cannot be edited after release: a schema that forbids a comment key strands every already-tagged system that used one."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Post-restart aliveness check — does the thing that is now running actually work? Failure here triggers the full rollback (previous tag, re-sync, restart, confirm the old version healthy) and a loud escalation, because unlike a smoke failure this one happened with production already switched.",
+      "properties": {
+        "cmd": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "timeout_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 120
+        },
+        "settle_seconds": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 3,
+          "description": "Wait after restart before verifying, for a unit that needs a moment to bind a port or write its first line."
+        }
+      },
+      "required": [
+        "cmd"
+      ]
+    },
+    "apply": {
+      "type": "object",
+      "patternProperties": {
+        "^//": {
+          "//": "A documentation key. Ignored by the runner and permitted at every object in this schema, because the contract is read FROM THE TAG and therefore cannot be edited after release: a schema that forbids a comment key strands every already-tagged system that used one."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Override for systems whose 'deploy' is not a launchd restart — a cloud-deployed system whose apply verb is its own deploy tooling, run from the machine that holds that system's deploy credentials (ADR-0103 D8 shape 2). When present, the runner runs this INSTEAD of the units restart; smoke and verify still bracket it.",
+      "properties": {
+        "cmd": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "timeout_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1800
+        },
+        "rerunnable": {
+          "type": "boolean",
+          "default": false,
+          "description": "WI-0411. true = this member declares that re-running `cmd` for a tag ALREADY on the tree is safe, so a sweep that finds no apply receipt for that tag may run it. Default false keeps the behaviour every already-tagged system has today: the tree holding the tag short-circuits the sweep and the apply is never re-run. It lives in the contract rather than the registry because idempotency is a property of the apply SCRIPT, which ships in the same tag as this declaration — so a member opts in when it next cuts, which is also the moment somebody has looked at the script."
+        }
+      },
+      "required": [
+        "cmd"
+      ]
+    },
+    "notes": {
+      "type": "string",
+      "description": "Free text for the next reader. Not parsed."
+    }
+  }
+}

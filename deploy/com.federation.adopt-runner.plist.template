@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Federation R3 headless adoption runner (ADR-0050) — Runner LaunchAgent.
+
+  poga-host: Runner
+
+  This is a TEMPLATE. `deploy/install-adopt-runner.sh` fills the __PLACEHOLDER__
+  tokens from the local machine and installs the concrete plist to
+  ~/Library/LaunchAgents (never committed — it carries machine-specific absolute
+  paths, P3). Installed as a LaunchAGENT (not a LaunchDaemon) on purpose: it loads
+  into the user's Aqua/GUI login session, so `claude -p` can read the subscription
+  login's token from the login keychain (ADR-0050 auth note). A
+  non-interactive path (LaunchDaemon / ssh) cannot unlock that keychain.
+
+  Fails safe: if the token is stale the runner aborts at its auth preflight and
+  authors a comms/ blocked note (it never touches a brief). Idempotent: a sweep with
+  no runner-eligible brief is a no-op.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.federation.adopt-runner</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>__PYTHON__</string>
+        <string>__FED_ROOT__/curate/adopt-runner.py</string>
+        <string>--claude-bin</string>
+        <string>__CLAUDE_BIN__</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>__FED_ROOT__</string>
+
+    <!-- launchd hands jobs a minimal PATH; give the runner claude + git + python.
+         PYTHONUNBUFFERED so the log is live (a hung headless session would otherwise
+         block-buffer its output to the file until exit).
+
+         THE LIST BELOW IS NOT THE WHOLE PATH, and must not be read as it.
+         `render_unit_plist` PREPENDS the rendering machine's `~/.local/bin` when it fills
+         the tokens above. A member's contract may resolve its apply verb on PATH by
+         design (ADR-0103 D8 shape 2) and that is where the operator installs those verbs:
+         a real member's apply verb was there once, this unit could not see it,
+         and the release stalled until a human ran the apply. The directory is not spelled
+         out here on purpose — `~` is a different place on every machine and a committed
+         `/Users/...` is WI-0132's defect, the same one the contract avoids.
+
+         `install-*.sh` renders this same file with a plain `sed` over a fixed token list
+         and does NOT add it, so a unit bootstrapped that way carries exactly the list
+         below until a cutover re-renders it. -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>__CLAUDE_DIR__:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <key>PYTHONUNBUFFERED</key>
+        <string>1</string>
+    </dict>
+
+    <!-- Nightly at 03:15 local, so the sweep runs overnight. -->
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key><integer>3</integer>
+        <key>Minute</key><integer>15</integer>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>StandardOutPath</key>
+    <string>__FED_ROOT__/.session-state/adopt-runner.launchd.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>__FED_ROOT__/.session-state/adopt-runner.launchd.err.log</string>
+
+    <!-- Don't let a hung headless session pin resources between fires. -->
+    <key>ProcessType</key>
+    <string>Background</string>
+</dict>
+</plist>

@@ -1,0 +1,27 @@
+# repo-paths — system-id -> live repo path locator for `curate/reconcile.py`
+#
+# Copy this file to `repo-paths.local` (gitignored) and map each managed system's
+# id to where its live repo actually lives on THIS machine. reconcile.py reads the
+# mapped path DIRECTLY (it does not walk to find it), so a system whose repo is not
+# under a `reconcile-roots.local` search root still reconciles.
+#
+# Why this exists: without it, a system whose repo isn't under a walk root (say, one
+# kept in some other folder) shows up as UNLOCATED, and UNLOCATED was repeatedly
+# misread as "never onboarded". With the map, UNLOCATED means only "not reachable from this
+# machine — add it here," never "not onboarded."
+#
+# Why a separate gitignored file: machine-specific filesystem paths stay out of
+# tracked files (P3 — data/system separation). reconcile.py never stores them.
+#
+# Format: `<system-id> = <absolute repo path>`, one per line. Split on the FIRST
+# `=`, so the path may contain spaces and `=`. The
+# system-id is the same id as `inputs/<id>-arch.md` (drop the trailing `-arch`)
+# and the system's own STATUS.md `id:` field. Blank lines and `#` comments ignored.
+#
+# USE THIS MACHINE'S OWN VIEW — the same repo has different paths per machine
+# (see reconcile-roots.example). A .local carrying another machine's paths resolves
+# nothing and reports every mapped system BROKEN MAP.
+
+# Examples (hypothetical members):
+#   example-app = /Users/you/Some Folder/Example App
+#   example-tool = /Users/you/Work/example-tool

@@ -1,0 +1,19 @@
+#!/bin/sh
+# pre-commit — federation binding advisory (ADR-0041 C4 auditable-evolution).
+#
+# Non-blocking reminder aimed at the "N commits past the tag with no bump" drift
+# (one member's finding: ~30 feature commits after the v0.1.0 tag,
+# version.json never moved). If source files are staged but neither version.json
+# nor CHANGELOG.md is, it warns. Advisory only — ALWAYS exits 0; a hard gate
+# (tag == version.json on release) belongs in CI, not every local commit.
+
+staged=$(git diff --cached --name-only)
+
+# Only speak up when actual source changed.
+echo "$staged" | grep -qiE '\.(py|ts|tsx|js|jsx|go|rs)$' || exit 0
+# If the version/changelog were touched, nothing to remind about.
+echo "$staged" | grep -qE '(version\.json|CHANGELOG\.md)' && exit 0
+
+echo "pre-commit note: source changed, but version.json / CHANGELOG.md were not staged." >&2
+echo "  If this commit is user-visible, bump the version + changelog (SemVer / Keep-a-Changelog)." >&2
+exit 0

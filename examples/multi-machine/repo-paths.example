@@ -1,0 +1,8 @@
+# FICTIONAL EXAMPLE — repo-paths.local as it would read on `devhost`.
+#
+# Each host keeps its own copy, because the same project sits at a different path on each
+# host. The file is machine-local and never committed. Format: `<system-id> = <path>`.
+
+federation = /Users/alex/Projects/poga
+example-app = /Users/alex/Projects/example-app
+example-tool = /Users/alex/Projects/example-tool

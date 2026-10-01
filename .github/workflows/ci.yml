@@ -1,0 +1,130 @@
+# CI for the public cut of POGA.
+#
+# This file ships ONLY in the public cut. The private working trunk has its own land
+# gate and does not run GitHub Actions.
+#
+# Runner: macos-15, pinned rather than macos-latest. POGA is used and tested on macOS,
+# and the harness runs on the system Python at /usr/bin/python3 (see interpreter.py and
+# session.config.json), not on whatever newer python3 the image puts first on PATH.
+# A pinned image keeps that interpreter and Git from moving under us when the
+# "latest" label changes; moving to a newer image is a one-line, reviewed change.
+#
+# Not run here, on purpose:
+#   - `python3 curate/public_cut.py --check`. Its manifest
+#     (curate/public_cut_manifest.json) is withheld from the cut, so the check cannot
+#     run in this tree. It runs where the cut is made.
+#   - `curate/standardize.py --check`, `curate/gen_settings.py --check` and
+#     `curate/check_citations.py --check`. They compare against files the cut rewrites
+#     or withholds (ops-items/, the generated kit and settings), so in this tree they
+#     report stale or "could not check", not a real defect.
+#   - `drills/basic-acceptance.sh` itself. It copies a `claude` runtime binary
+#     into a macOS sandbox that blocks /opt/homebrew, /usr/local and the
+#     network. A hosted runner has no runtime installed, installing one needs the
+#     network, and the drill's agent steps need a person anyway. We only check that
+#     the script is there and executable. Its record is drills/basic-acceptance.md.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Install, onboarding and quick checks
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      # Put the system tools first, so `python3` and `git` are the ones the harness
+      # itself uses on macOS.
+      - name: Use the system Python and Git
+        run: echo "/usr/bin" >> "$GITHUB_PATH"
+
+      - name: Show tool versions
+        run: |
+          command -v python3 git
+          python3 --version
+          git --version
+          bash --version | head -1
+
+      - name: The drill script is executable
+        run: test -x drills/basic-acceptance.sh
+
+      - name: The poga script parses
+        run: bash -n poga
+
+      - name: Install and init tests
+        run: python3 -B -m unittest tests.test_poga_install tests.test_local_init
+
+      # The README's first two steps, for real, in a throwaway home: install the
+      # command, then make a project. No network, no runtime, no remote.
+      - name: Install and init smoke run
+        run: |
+          set -euo pipefail
+          export HOME="$RUNNER_TEMP/home"
+          mkdir -p "$HOME"
+          ./poga install
+          test -L "$HOME/.local/bin/poga"
+          export PATH="$HOME/.local/bin:$PATH"
+          mkdir "$RUNNER_TEMP/alpha"
+          cd "$RUNNER_TEMP/alpha"
+          poga init --yes --user-name "CI" --timezone UTC --machine-label ci
+          test -f session.config.json
+          test -f "$HOME/.config/poga/federation/federation.json"
+          git log --oneline -1
+
+      - name: Work-item store is sound
+        run: python3 -B session.py wi-check
+
+      - name: Canon digest is in sync
+        run: python3 -B curate/distill.py --check
+
+      - name: Canon fits its size budget
+        run: python3 -B curate/check_canon_budget.py --check
+
+      - name: Substrate docs match the code
+        run: python3 -B curate/check_substrate_docs.py --check
+
+  suite:
+    name: Full test suite
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Use the system Python and Git
+        run: echo "/usr/bin" >> "$GITHUB_PATH"
+
+      - name: Show tool versions
+        run: |
+          python3 --version
+          git --version
+
+      # The dispatch and attach tests drive tmux, and the remote-provisioning tests look
+      # for the gh CLI (they never log in or reach GitHub). Without tmux, 25 tests fail;
+      # without gh, one does. Install whichever the image lacks.
+      - name: tmux and gh are on PATH
+        run: |
+          command -v tmux || brew install tmux
+          command -v gh || brew install gh
+          tmux -V
+          gh --version | head -1
+
+      # No Git identity is set: the tests set their own for the scratch repos they make.
+      # They also need no runtime binary and no sign-in. About 20 minutes on a laptop.
+      - name: Run the full suite
+        run: python3 -B -m unittest discover -s tests

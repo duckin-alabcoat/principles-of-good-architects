@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Federation outbox mail poller — LaunchAgent.
+
+  poga-host: any
+
+  `any` IS A REAL ANSWER HERE, NOT A SHRUG (WI-0420). This unit's header says
+  "INSTALL IT ON EVERY MACHINE THAT HOLDS MEMBER REPOS", and that is exactly what
+  it means. The renderer refuses a template that declares NO host, so saying `any`
+  out loud is what keeps "belongs everywhere" distinguishable from "nobody said".
+
+  This is a TEMPLATE. `deploy/install-mail-poller.sh` fills the __PLACEHOLDER__ tokens
+  from the local machine and installs the concrete plist to ~/Library/LaunchAgents
+  (never committed — it carries machine-specific absolute paths, P3; `.gitignore`
+  already refuses `deploy/*.plist`).
+
+  WHAT IT DOES. Drains `outbox/to-<architect-id>/` by delivering every queued brief this
+  machine can actually reach, and leaving the rest for the machine that can. On each
+  machine that means the members whose repos it holds. Same program everywhere — the
+  poller asks the resolver "can I reach this recipient?", never "which machine am I?".
+
+  INSTALL IT ON EVERY MACHINE THAT HOLDS MEMBER REPOS. This is not a Runner-only agent.
+  A machine running it delivers its own reachable share; a machine not running it simply
+  leaves its share queued, visibly, in a tracked directory.
+
+  WHY AN AGENT AND NOT A DAEMON. It works inside one user's checkout and one user's file
+  ownership, and it may need that user's git credential helper to fetch. A LaunchDaemon
+  runs before login in a different security context and would have neither.
+
+  UNLIKE the adopt-runner, this job never spawns `claude` and so has no login-keychain
+  constraint — the delivery is a file copy and a fetch. That is also why it can run every
+  ten minutes without costing anything.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.federation.mail-poller</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>__PYTHON__</string>
+        <string>__FED_ROOT__/curate/mail-poller.py</string>
+        <string>--quiet</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>__FED_ROOT__</string>
+
+    <!-- launchd sources no shell profile and hands jobs a minimal PATH (WI-0171), so
+         `git` and the credential helper must be named here or the fetch fails in a way
+         that looks like a network problem. PYTHONUNBUFFERED keeps the log live.
+
+         THE LIST BELOW IS NOT THE WHOLE PATH, and must not be read as it.
+         `render_unit_plist` PREPENDS the rendering machine's `~/.local/bin` when it fills
+         the tokens above. A member's contract may resolve its apply verb on PATH by
+         design (ADR-0103 D8 shape 2) and that is where the operator installs those verbs:
+         a real member's apply verb was there once, this unit could not see it,
+         and the release stalled until a human ran the apply. The directory is not spelled
+         out here on purpose — `~` is a different place on every machine and a committed
+         `/Users/...` is WI-0132's defect, the same one the contract avoids.
+
+         `install-*.sh` renders this same file with a plain `sed` over a fixed token list
+         and does NOT add it, so a unit bootstrapped that way carries exactly the list
+         below until a cutover re-renders it. -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <key>PYTHONUNBUFFERED</key>
+        <string>1</string>
+    </dict>
+
+    <!-- Every ten minutes. Mail is asynchronous by nature — the recipient reads its
+         inbox at its next session start — so this interval is about bounding how long a
+         brief sits queued, not about latency anyone waits on. It is cheap: a fetch and,
+         almost always, nothing to do. -->
+    <key>StartInterval</key>
+    <integer>600</integer>
+
+    <!-- Deliberately false. A poller that fires on every login turns "I rebooted" into a
+         delivery event, and the first run after a reboot is the one most likely to find
+         a checkout mid-something. The next interval is at most ten minutes away. -->
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>StandardOutPath</key>
+    <string>__FED_ROOT__/.session-state/mail-poller.launchd.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>__FED_ROOT__/.session-state/mail-poller.launchd.err.log</string>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+</dict>
+</plist>
