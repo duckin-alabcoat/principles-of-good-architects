@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/duckin-alabcoat/principles-of-good-architects/state-manifest.schema.json",
+  "title": "Per-system state manifest",
+  "description": "ADR-0061 D3 as refined by ADR-0094. A project's declaration of its non-derivable data: WHAT it has and HOW to know it came back correct, stated once. It names no backup medium — where the data is kept and how to retrieve it belong to the backup layer, not to any project. Tracked in the project's repo (it names locations, holds no secrets or user data). One file per system: `state-manifest.<system>.json`. CONSUMED by `poga restore`, which verifies the declared data against the install root and reports what is still owed; the backup layer places it. Credentials are declared separately in the sibling `credentials-manifest.<system>.json`. Schema 2.0.0 is a BREAKING change from 1.x: `data_sources` (grouped by backup medium) is gone, and a manifest that still carries it is refused.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["system", "version", "spec", "data"],
+  "patternProperties": {
+    "^//": {
+      "description": "Documentation. Any `//`-prefixed key is a comment (repo convention, see bootstrap-spec.example.json): no code reads it. The only non-string use is a DATED QUARANTINE block holding retrieval text that is waiting for its new owner to confirm receipt (ADR-0094 Consequences: retrieval knowledge moves, it is never simply deleted). Never a secret."
+    }
+  },
+  "properties": {
+    "system": {
+      "type": "string",
+      "description": "The system-id this manifest belongs to (kebab function name, ADR-0006). Must match the `<system>` in this file's name.",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+    },
+    "version": {
+      "type": "string",
+      "description": "The manifest-schema version this instance targets (semver). Bumped when the manifest SCHEMA changes; distinct from the system's own version. 2.0.0 is the ADR-0094 shape.",
+      "pattern": "^2\\.[0-9]+\\.[0-9]+$"
+    },
+    "spec": {
+      "type": "string",
+      "description": "The D1 shared build input — the `bootstrap-spec.<system>.json` this system builds from. `restore` = `bootstrap <spec>` + verify the data declared below.",
+      "pattern": "^bootstrap-spec[.-].+\\.json$"
+    },
+    "data": { "$ref": "#/$defs/data" }
+  },
+  "$defs": {
+    "data": {
+      "type": "object",
+      "description": "The data set, declared once. Only the project can make this call: which of its files are non-derivable (not in git, not regenerable), where they sit, and how to tell a correct return from a merely present one.",
+      "additionalProperties": false,
+      "required": ["dest", "paths"],
+      "patternProperties": { "^//": {} },
+      "properties": {
+        "dest": {
+          "type": "string",
+          "description": "Parameterized install root the `paths` sit under. MUST NOT be a hardcoded home directory (drill #1 finding 5) — use a parameter token like ${FEDERATION_ROOT} or ${SYSTEM_ROOT}, or a path relative to the install root, so a restore onto a different machine/account resolves correctly.",
+          "minLength": 1,
+          "not": {
+            "pattern": "^/(Users|home)/[^/]+|^/Volumes/[^/]+/(Users|home)/[^/]+"
+          }
+        },
+        "paths": {
+          "type": "array",
+          "description": "Every non-derivable path, relative to `dest`, each with its verification. An EMPTY array asserts the system has NO non-derivable state; it is a positive claim, not an omission.",
+          "items": { "$ref": "#/$defs/path" }
+        }
+      }
+    },
+    "path": {
+      "type": "object",
+      "description": "One declared path and how to know it came back correct. Every path must be present and non-empty — that rule is universal and is not restated per entry. `contains` adds what only the project knows: presence is not integrity.",
+      "additionalProperties": false,
+      "required": ["path"],
+      "patternProperties": { "^//": {} },
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Relative to `dest`. A trailing `/` marks a directory. Never absolute, never `..`.",
+          "minLength": 1,
+          "not": { "pattern": "^/|(^|/)\\.\\.(/|$)" }
+        },
+        "contains": {
+          "type": "array",
+          "description": "Names that must exist under this path for the return to count as correct, relative to it (e.g. `operator/profile.md` under `users/`). Checked by code as existence tests, never executed.",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "not": { "pattern": "^/|(^|/)\\.\\.(/|$)" }
+          }
+        }
+      }
+    }
+  }
+}

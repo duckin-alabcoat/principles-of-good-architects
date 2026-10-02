@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Federation gate-input deriver (OPS-0009, WI-0407) — devbox LaunchDAEMON.
+
+  poga-host: DevBox
+
+  THE LINE ABOVE IS READ BY THE RENDERER, not just by you (WI-0420). The header
+  below says this unit is devbox's, but a cutover on the Runner that read only
+  structure would render it anyway and install it as a LaunchAgent, because a comment
+  is something a person reads. `deploy/runner.py` now refuses to
+  render any unit template that does not carry a `poga-host:` line, and skips the
+  ones naming another machine.
+
+  This is a TEMPLATE. `deploy/install-gate-inputs.sh` fills the __PLACEHOLDER__ tokens
+  from the local machine and installs the concrete plist to /Library/LaunchDaemons
+  (never committed — it carries machine-specific absolute paths, P3; `.gitignore`
+  already refuses `deploy/*.plist`).
+
+  WHAT IT DOES. Fires `curate/gate-inputs-runner.py`, which opens a lane on the current
+  trunk, runs `curate/gate_inputs.py` in derive mode serially, lands the record-only diff and
+  records the OPS-0009 run. Until this unit existed that happened when a person
+  remembered, which is the WI-0087 shape OPS-0009 only half closed: the obligation was
+  visible and dated, and still nothing RAN it.
+
+  WHY IT MATTERS MORE THAN ITS SIZE SUGGESTS. The derive is the ONLY serial full-suite run
+  the federation performs. The land gate is sharded, so it structurally cannot see
+  order-dependent contamination between tests. The record this unit produces is therefore
+  the one thing standing between the fleet and a class of defect nothing else looks for.
+
+  THIS UNIT IS DEVBOX'S, AND THAT IS THE POINT.
+  The other three federation units live on the Runner because they need a logged-in Aqua
+  session: `com.federation.adopt-runner` spawns `claude -p` and reads the login-keychain
+  OAuth token. THIS one spawns no `claude`, reads no keychain, and touches no member repo.
+  It is dev work on the dev trunk, so it belongs on the machine that holds the dev trunk.
+  The runner's own `refuse_wrong_tree` is what keeps it from drifting to the Runner. Note what is ABSENT below:
+  no __CLAUDE_BIN__, no __CLAUDE_DIR__, and no GUI-session requirement.
+
+  WHY A DAEMON AND NOT AN AGENT — THE DESIGN ASSUMES THE DEV BOX IS HEADLESS.
+  WI-0407 asked for a LaunchAgent. On a machine nobody logs into graphically a
+  LaunchAgent cannot load at all, so building one would ship a unit that installs
+  cleanly and never runs. What such a machine answers:
+
+      launchctl managername            -> Background
+      launchctl print gui/<uid>        -> not reachable
+      launchctl bootstrap user/<uid>   -> Bootstrap failed: 5: Input/output error
+
+  Agents load at graphical login, and the design gives devbox none.
+  `deploy/install-mail-poller.sh` already knows this — its third branch REFUSES to
+  install an agent on such a machine and says so. That refusal is right for the poller, which has a real fallback: a
+  session-start drain costs nothing, so a headless box can do the work whenever a session
+  runs. This obligation has no such fallback. A long serial full-suite run cannot
+  ride a session start, which is precisely why OPS-0009 kept lapsing. So the unit type is
+  the thing that had to give, not the machine and not the obligation.
+
+  A daemon loads at BOOT and needs no login, which is what a machine nobody logs into
+  requires. It is the only difference from its three siblings, and it is forced.
+
+  IT MUST NOT RUN AS ROOT. `UserName` is NOT in this tracked template, because the
+  renderer substitutes exactly four tokens (__FED_ROOT__, __PYTHON__, __CLAUDE_BIN__,
+  __CLAUDE_DIR__) and any other __UPPER__ token in a value makes it refuse. The installer
+  injects `UserName` after rendering, from `id -un`. A copy produced some other way would
+  therefore run as root and fill the operator's checkout with root-owned files — so the runner
+  REFUSES to start as root rather than trust that this comment was read.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.federation.gate-inputs</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>__PYTHON__</string>
+        <string>__FED_ROOT__/curate/gate-inputs-runner.py</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>__FED_ROOT__</string>
+
+    <!-- launchd sources no shell profile and hands jobs a minimal PATH (WI-0171), so
+         `git` must be named here or the fetch and the push fail in a way that looks like
+         a network problem. PYTHONUNBUFFERED keeps the log live — a long derive
+         would otherwise block-buffer its whole output to the file, and a watcher could
+         not tell a working run from a hung one.
+
+         THE LIST BELOW IS NOT THE WHOLE PATH, and must not be read as it.
+         `render_unit_plist` PREPENDS the rendering machine's `~/.local/bin` when it fills
+         the tokens above. The directory is not spelled out here on purpose — `~` is a
+         different place on every machine and a committed absolute home path is WI-0132's
+         defect. This runner needs nothing from the operator bin either way: it invokes
+         the harness by absolute path out of its own checkout.
+
+         HOME is deliberately NOT set here, for the same reason `UserName` is not: it
+         would have to be an absolute home path in a tracked file. The runner derives it
+         from the password database, which is the one answer `$HOME` cannot lie about. -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <key>PYTHONUNBUFFERED</key>
+        <string>1</string>
+    </dict>
+
+    <!-- Nightly at 02:30 local. OPS-0009 is a DAILY obligation, so the cadence is the
+         obligation's rather than a guess. 02:30 and not the adopt-runner's 03:15 for a
+         reason that is not machine contention (they are on different machines): the
+         derive runs the full suite serially, which takes tens of minutes, and it
+         should be finished, landed and pushed before anything else wakes up. -->
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key><integer>2</integer>
+        <key>Minute</key><integer>30</integer>
+    </dict>
+
+    <!-- Deliberately false. A machine that just booted is the one most likely to hold a
+         checkout mid-something, and a long serial suite run is the worst possible thing to
+         start into that. The next fire is at most a day away, and a missed night shows up
+         as OPS-0009 going overdue, which the next session start prints first. -->
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>StandardOutPath</key>
+    <string>__FED_ROOT__/.session-state/gate-inputs.launchd.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>__FED_ROOT__/.session-state/gate-inputs.launchd.err.log</string>
+
+    <!-- Don't let an 18-minute suite run compete with an interactive session for CPU. -->
+    <key>ProcessType</key>
+    <string>Background</string>
+</dict>
+</plist>

@@ -1,0 +1,430 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/session.py\" check-bash"
+          }
+        ]
+      },
+      {
+        "matcher": "AskUserQuestion",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/session.py\" check-question"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/session.py\" heartbeat"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/session.py\" start"
+          },
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/session.py\" announce"
+          }
+        ]
+      },
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/standard_check.py\" --status"
+          }
+        ]
+      },
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/session.py\" apply-briefs"
+          }
+        ]
+      },
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/curate/gather.py\" --status"
+          }
+        ]
+      },
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/curate/reconcile.py\" --status"
+          }
+        ]
+      },
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/curate/standard_version.py\" --fleet-status"
+          }
+        ]
+      },
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/curate/metrics.py\" --status"
+          }
+        ]
+      },
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/curate/gen_registry.py\" --status"
+          }
+        ]
+      },
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/session.py\" inbox-check --status"
+          }
+        ]
+      },
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/curate/deliver.py\" --audit --status"
+          }
+        ]
+      },
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/curate/gen_indexes.py\" --status"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/session.py\" release-list --status"
+          }
+        ]
+      },
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/curate/check_substrate_docs.py\" --status"
+          }
+        ]
+      },
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/curate/check_citations.py\" --status"
+          }
+        ]
+      },
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/curate/token_ledger.py\" --status"
+          }
+        ]
+      },
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/curate/finish_line.py\" --status"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/session.py\" heartbeat"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/curate/check_reply.py\""
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/session.py\" record-end"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/curate/mail-poller.py\" --quiet"
+          }
+        ]
+      }
+    ],
+    "WorktreeRemove": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/session.py\" worktree-remove"
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/session.py\" notify"
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash(git status)",
+      "Bash(git status:*)",
+      "Bash(git status *)",
+      "Bash(git log)",
+      "Bash(git log:*)",
+      "Bash(git log *)",
+      "Bash(git diff)",
+      "Bash(git diff:*)",
+      "Bash(git diff *)",
+      "Bash(git show:*)",
+      "Bash(git show *)",
+      "Bash(git fetch)",
+      "Bash(git fetch:*)",
+      "Bash(git fetch *)",
+      "Bash(git pull)",
+      "Bash(git pull:*)",
+      "Bash(git pull *)",
+      "Bash(git remote)",
+      "Bash(git remote -v)",
+      "Bash(git remote:*)",
+      "Bash(git branch)",
+      "Bash(git branch -v)",
+      "Bash(git branch -r)",
+      "Bash(git branch -a)",
+      "Bash(git branch:*)",
+      "Bash(git branch *)",
+      "Bash(git ls-files:*)",
+      "Bash(git ls-files *)",
+      "Bash(git check-ignore *)",
+      "Bash(git worktree list)",
+      "Bash(git worktree:*)",
+      "Bash(git worktree *)",
+      "Bash(git add:*)",
+      "Bash(git add *)",
+      "Bash(git restore:*)",
+      "Bash(git restore *)",
+      "Bash(git commit:*)",
+      "Bash(git commit *)",
+      "Bash(git push)",
+      "Bash(git push origin:*)",
+      "Bash(git push origin *)",
+      "Bash(git push -u origin:*)",
+      "Bash(git push -u origin *)",
+      "Bash(git checkout:*)",
+      "Bash(git checkout *)",
+      "Bash(git merge)",
+      "Bash(git merge:*)",
+      "Bash(git merge *)",
+      "Bash(git stash)",
+      "Bash(git stash:*)",
+      "Bash(git stash *)",
+      "Bash(git config --get:*)",
+      "Bash(git config --list)",
+      "Bash(git config user.name)",
+      "Bash(git config user.email)",
+      "Bash(git -C:*)",
+      "Bash(git -C *)",
+      "Bash(pwd)",
+      "Bash(ls)",
+      "Bash(ls:*)",
+      "Bash(ls *)",
+      "Bash(cat:*)",
+      "Bash(head:*)",
+      "Bash(tail:*)",
+      "Bash(echo:*)",
+      "Bash(mkdir:*)",
+      "Bash(mkdir *)",
+      "Bash(poga authorize check:*)",
+      "Bash(poga authorize check *)",
+      "Bash(poga authorize list)",
+      "Bash(poga authorize list:*)",
+      "Bash(poga authorize list *)",
+      "Bash(./poga authorize check:*)",
+      "Bash(./poga authorize check *)",
+      "Bash(./poga authorize list)",
+      "Bash(./poga authorize list:*)",
+      "Bash(./poga authorize list *)",
+      "Bash(python3 session.py authorize-check:*)",
+      "Bash(python3 session.py authorize-check *)",
+      "Bash(python3 session.py authorize-list)",
+      "Bash(python3 session.py authorize-list:*)",
+      "Bash(python3 session.py authorize-list *)",
+      "Bash(python3 -m pytest:*)",
+      "Bash(python3 -m pytest *)",
+      "Bash(python3 session.py:*)",
+      "Bash(python3 session.py *)",
+      "Bash(python3 curate/*)",
+      "Bash(python3 deploy/runner.py:*)",
+      "Bash(python3 deploy/runner.py *)",
+      "Bash(python3 deploy/*)",
+      "Bash(poga deploy:*)",
+      "Bash(poga deploy *)",
+      "Bash(./poga deploy:*)",
+      "Bash(./poga deploy *)",
+      "Bash(launchctl list:*)",
+      "Bash(launchctl list *)",
+      "Bash(launchctl print:*)",
+      "Bash(launchctl print *)",
+      "Bash(launchctl load:*)",
+      "Bash(launchctl load *)",
+      "Bash(launchctl unload:*)",
+      "Bash(launchctl unload *)",
+      "Bash(launchctl bootstrap:*)",
+      "Bash(launchctl bootstrap *)",
+      "Bash(launchctl bootout:*)",
+      "Bash(launchctl bootout *)",
+      "Bash(launchctl kickstart:*)",
+      "Bash(launchctl kickstart *)",
+      "Bash(launchctl enable:*)",
+      "Bash(launchctl disable:*)",
+      "Bash(python3 tests/*)",
+      "Bash(jq:*)",
+      "Bash(jq *)",
+      "Bash(cp:*)",
+      "Bash(cp *)",
+      "Bash(mv:*)",
+      "Bash(mv *)",
+      "Edit(**)",
+      "Write(**)",
+      "Bash(poga work status:*)",
+      "Bash(poga work status *)",
+      "Bash(./poga work status:*)",
+      "Bash(./poga work status *)",
+      "Bash(poga work edit:*)",
+      "Bash(poga work edit *)",
+      "Bash(./poga work edit:*)",
+      "Bash(./poga work edit *)",
+      "Bash(poga work move:*)",
+      "Bash(poga work move *)",
+      "Bash(./poga work move:*)",
+      "Bash(./poga work move *)",
+      "Bash(poga dispatch:*)",
+      "Bash(poga dispatch *)",
+      "Bash(./poga dispatch:*)",
+      "Bash(./poga dispatch *)"
+    ],
+    "deny": [
+      "Bash(git push --force:*)",
+      "Bash(git push --force *)",
+      "Bash(git push -f:*)",
+      "Bash(git push -f *)",
+      "Bash(git push --force-with-lease:*)",
+      "Bash(git push --force-with-lease *)",
+      "Bash(git push --mirror:*)",
+      "Bash(git push --mirror *)",
+      "Bash(git push --delete:*)",
+      "Bash(git push --delete *)",
+      "Bash(git push origin --delete:*)",
+      "Bash(git push origin --delete *)",
+      "Bash(git push origin :*)",
+      "Bash(git reset --hard:*)",
+      "Bash(git reset --hard *)",
+      "Bash(git reset --keep:*)",
+      "Bash(git reset --keep *)",
+      "Bash(git branch -D:*)",
+      "Bash(git branch -D *)",
+      "Bash(git branch --delete --force:*)",
+      "Bash(git branch --delete --force *)",
+      "Bash(git rebase -i:*)",
+      "Bash(git rebase -i *)",
+      "Bash(git rebase --interactive:*)",
+      "Bash(git rebase --interactive *)",
+      "Bash(git rebase --onto:*)",
+      "Bash(git rebase --onto *)",
+      "Bash(git filter-branch:*)",
+      "Bash(git filter-branch *)",
+      "Bash(git filter-repo:*)",
+      "Bash(git filter-repo *)",
+      "Bash(git clean -f:*)",
+      "Bash(git clean -f *)",
+      "Bash(git clean -fd:*)",
+      "Bash(git clean -fd *)",
+      "Bash(git clean -fdx:*)",
+      "Bash(git clean -fdx *)",
+      "Bash(git update-ref -d:*)",
+      "Bash(git update-ref -d *)",
+      "Bash(git reflog expire:*)",
+      "Bash(git reflog expire *)",
+      "Bash(git gc --prune=now:*)",
+      "Bash(git gc --prune=now *)",
+      "Bash(gh repo delete:*)",
+      "Bash(gh repo delete *)",
+      "Bash(gh repo edit --visibility:*)",
+      "Bash(gh repo edit --visibility *)",
+      "Bash(rm -rf .git:*)",
+      "Bash(rm -rf .git *)",
+      "Bash(rm -rf .git)"
+    ]
+  },
+  "feedbackDrafts": "off",
+  "modelProposedGoals": "disabled"
+}

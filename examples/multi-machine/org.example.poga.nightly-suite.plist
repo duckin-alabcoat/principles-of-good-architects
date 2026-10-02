@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  FICTIONAL EXAMPLE. The nightly serial suite run, as installed on `devhost`.
+
+  A LaunchDaemon in /Library/LaunchDaemons, because `devhost` has no graphical login and a
+  LaunchAgent would never load there. It runs as the user `alex`, never as root. It starts
+  no agent runtime, so it needs no logged-in session.
+
+  Rendered from deploy/com.federation.gate-inputs.plist.template by
+  deploy/install-gate-inputs.sh on the host itself.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>org.example.poga.nightly-suite</string>
+
+    <key>UserName</key>
+    <string>alex</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/python3</string>
+        <string>/Users/alex/Projects/poga/curate/gate-inputs-runner.py</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/alex/Projects/poga</string>
+
+    <!-- 02:30 local time (Europe/Lisbon on this host). -->
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key><integer>2</integer>
+        <key>Minute</key><integer>30</integer>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/alex/Projects/poga/.session-state/nightly-suite.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/alex/Projects/poga/.session-state/nightly-suite.err.log</string>
+</dict>
+</plist>
