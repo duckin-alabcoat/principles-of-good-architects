@@ -1,0 +1,2535 @@
+#!/usr/bin/env bash
+# poga — the federation's terminal CLI (ADR-0060), shipped fleet-wide as substrate.
+#
+# TWO SCOPES IN ONE FILE. `session` / `lanes` / `install` are UNIVERSAL — they operate
+# on whichever repo you are standing in, so this one script is pushed byte-identical to
+# every converged member alongside session.py and standard_check.py. `bootstrap` /
+# `restore` are FEDERATION-ONLY — they need poga_cli.py, which is not shipped, and say
+# so plainly on a member copy. One file, not two: a members-only fork would be a
+# maintained duplicate (P16), and the universal half is the overwhelming majority.
+#
+# Verbs: `session` (the default) launches a Claude Code session in an isolated git
+# worktree LANE, so two terminal sessions run truly in parallel — each with its own
+# dir + index + branch — landing independently through the gate. This is the "git
+# wrapper around an LLM" of ADR-0060: a deterministic outer shell (allocate a lane ->
+# exec `claude` -> teardown by the WorktreeRemove hook) with the non-deterministic LLM
+# in the middle. `lanes` lists/cleans the pool. `bootstrap` / `restore` are the
+# ADR-0061 lifecycle verbs (one shared pipeline in poga_cli.py). `install` is the
+# one-time per-machine symlink into ~/.local/bin (mechanical only). `run` remains the
+# one RESERVED verb (ADR-0061 D1 placeholder, deliberately unspecified).
+#
+# Isolation is native: `claude --worktree poga-<n>` creates .claude/worktrees/poga-<n>
+# on branch `worktree-poga-<n>`. Teardown is our WorktreeRemove hook running
+# `session.py worktree-remove` (delete the merged branch). Landing is `session.py merge`
+# on the lane when the work package is done but the session continues, or `session.py end`
+# on the lane when the session is over; both ff-advance the trunk to the lane tip by
+# plumbing — only `end` also stamps the journal closed. When that land's PUSH is rejected
+# (a peer pushed while we were landing), the land runs `session.py integrate` for itself —
+# replay onto origin in a scratch worktree, re-gate, CAS, push (ADR-0097 / WI-0143). The
+# `integrate` verb below is the same thing on demand, for the retry cases.
+#
+# `bootstrap --adopt <path>` reaches the ADR-0067 adopt-in-place engine directly (no
+# acquire phase — the repo already exists); `--create-remote` and `--plan`/`--dry-run`
+# pass through the same way (2026-07-24 consultant parity brief).
+#
+# Ergonomics (ADR-0060 Q3): you type `poga`. The wrapper AUTO-ALLOCATES the lowest
+# free lane from a reusable pool — the lane is never something you encode by hand.
+set -euo pipefail
+
+# WI-0105. Without this, a failed `exec` KILLS the shell outright — so the launch paths
+# below could allocate a lane, cut a worktree, write an 81k session-context and a prep
+# marker, then vanish on a bad runtime command with every bit of that still on disk and
+# no `poga` left to clean it up. `execfail` makes a failed exec RETURN instead, which is
+# the item's own prescription: the launch path removes what it created when exec returns
+# at all, since a successful exec never returns.
+shopt -s execfail
+
+# WI-0468 — POGA REFUSES TO RUN AS ROOT. A root run writes root-owned files (lanes,
+# journals, .session-state, git objects) into a checkout the operator's own sessions must
+# later write, and they then fail far from the cause; `curate/gate-inputs-runner.py`
+# refuses root for its runner for the same reason. One line, what to do instead, exit 2
+# (a refusal, like the other preconditions here). Help and version still answer: a
+# reader asking what poga is should not be told off first. `session.py` makes the same
+# refusal at its own entry, which a user also reaches directly. `id -u` rather than
+# $EUID so a test can stand a fake `id` on PATH instead of needing a real root.
+poga_refuse_root() {
+  case "${1:-}" in -h|--help|help|--version) return 0 ;; esac
+  if [ "$(id -u 2>/dev/null || echo unknown)" = "0" ]; then
+    echo "poga: refusing to run as root — it would leave root-owned files your own sessions cannot edit. Run poga as your normal user, not with sudo or in a root shell." >&2
+    exit 2
+  fi
+}
+poga_refuse_root "${1:-}"
+
+# Capture where the user actually invoked `poga` from, BEFORE the cd's below move
+# this shell into the federation checkout. `bootstrap --adopt` (with no PATH — 2026-07-24,
+# the operator's ruling: adopt runs in the current directory) and `--into` resolve relative paths
+# against this, not against the federation repo the rest of this script operates in.
+# Exported so poga_cli.py / bootstrap.py can see it too.
+export POGA_INVOKED_FROM="$PWD"
+
+# SCRIPT_DIR = where this copy of poga physically lives. RESOLVE THE SYMLINK FIRST:
+# poga is installed on PATH as ~/.local/bin/poga -> <repo>/poga, and bash sets
+# BASH_SOURCE[0] to the path used to INVOKE it — the symlink — so a bare `dirname`
+# landed on ~/.local/bin. Found session 90: `poga lanes` printed "not a git repository"
+# and reported no lanes while six were live; worse, lane_taken's two probes BOTH fail
+# outside a repo, so alloc_lane returned poga-1 on every call — the ADR-0060 Q3
+# "lowest free lane" allocator had never actually run.
+# WI-0328 — resolve the interpreter ONCE, here, rather than letting each of the ~35
+# call sites below take whatever `python3` the operator's PATH resolves. On one machine
+# that was a newer, separately installed Python while /usr/bin/python3 is the older system
+# one, and the two disagree about the suite's verdict: on 2026-09-10 five lanes built green and every single land was
+# refused at the gate.
+#
+# This is the CHEAP tier, deliberately. It knows $POGA_PYTHON and the macOS default; it
+# does NOT read session.config.json, because ROOT — the repo poga operates on — is not
+# resolved until `require_repo`, and a member's declared interpreter lives inside it.
+# The authoritative tier is `interpreter.ensure()` inside the Python entry points,
+# which re-execs when this guess disagrees with what the member declared. Getting it
+# approximately right here is what keeps that re-exec from firing on every call: a
+# second interpreter start costs 0.109 s, which is the same per-verb tax WI-0222
+# refused to pay.
+PY="${POGA_PYTHON:-}"
+if [ -z "${PY:-python3}" ] || [ ! -x "${PY:-python3}" ]; then
+  PY=python3
+  if [ "$(uname -s)" = "Darwin" ] && [ -x /usr/bin/python3 ]; then
+    PY=/usr/bin/python3
+  fi
+fi
+# NOT exported. `interpreter.resolve` treats $POGA_PYTHON as the operator's explicit
+# override, ranked ABOVE the member's declared config key — so exporting this guess
+# into it would let poga outrank a member that had actually declared an interpreter,
+# inverting the order. $PY is a guess about where to start, not a decision about where
+# to end up; the Python side still gets the last word.
+#
+# Call sites spell it `"${PY:-python3}"`, not `"$PY"`. `tests/test_preflight.py` lifts
+# `poga_preflight_gate` and `poga_preflight_capture` out of this file and runs them
+# standalone under `set -euo pipefail` — it does that precisely because reading the
+# source missed WI-0180's fail-open branch — and a function that reaches for a global
+# the extraction does not carry dies on `unbound variable`. In a real run PY is always
+# set and the default never fires; what it buys is that no reader of these functions
+# can be broken by where it read them from.
+
+# `readlink -f` is GNU-only on older macOS, so resolve with python3 (already required).
+_SRC="${BASH_SOURCE[0]}"
+SCRIPT_DIR="$("${PY:-python3}" -c 'import os,sys; print(os.path.dirname(os.path.realpath(sys.argv[1])))' "$_SRC")"
+
+# ROOT — the repo poga OPERATES ON — is resolved from the CALLER'S CWD, not from
+# SCRIPT_DIR. This is what makes poga fleet substrate rather than a federation-only
+# tool: one `~/.local/bin/poga` symlink serves every member repo, because the bytes
+# are identical everywhere and the repo is whichever one you are standing in. (When
+# poga was federation-only, script-relative was right — there was one repo. Shipping
+# it to N members makes script-relative actively wrong: it would silently drive the
+# federation checkout from inside a member.)
+#
+# Resolved LAZILY — only `session` and `lanes` need a repo. `bootstrap --adopt` in a
+# plain non-git directory is a supported ADR-0067 case (2.39.0 auto-inits it), so a
+# hard repo requirement up here would break the verb that must work outside one.
+ROOT=""
+require_repo() {
+  git rev-parse --git-dir >/dev/null 2>&1 || {
+    echo "poga: $PWD is not a git repository — \`poga $1\` operates on the repo you are" >&2
+    echo "standing in. cd into a member checkout and re-run." >&2
+    exit 2
+  }
+  # Anchor on the MAIN checkout, not merely the cwd: every linked worktree shares one
+  # common git dir (`<main>/.git`), so its parent is the main tree whether poga is
+  # invoked from there or from inside a lane. Without this, running from inside a lane
+  # resolved ROOT to the lane and reported every live lane as an "orphaned-branch
+  # (no worktree)" — the lane pool lives under the MAIN checkout.
+  ROOT="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
+  cd "$ROOT"
+}
+
+# WI-0222 — WHY THE STALENESS CHECK IS NOT HERE, though the item asked for it here.
+#
+# The defect is real and this is where it was diagnosed: `require_repo` anchors on the MAIN
+# checkout, so `poga work` answers from main even when main is far behind its
+# remote — so a stale main lists a store with different numbering from the trunk and can
+# re-DRAW an id that already exists.
+#
+# The check landed in `session.py` instead, at `main()`'s dispatch point, for three reasons
+# and one measurement. (1) COST: a second `python3` start costs most of what a
+# `poga work list` costs — a large tax on every verb — while the same probe
+# inside the process that is already starting costs a few ms. Paying an interpreter start to warn about
+# staleness would have partly undone the reason the refresh is cached at all. (2) ONE
+# IMPLEMENTATION: a bash copy of "resolve upstream, refresh on a TTL, count, three
+# outcomes" would drift from the Python one, which is the duplication `single-source-and-
+# deliver` exists to prevent — and this defect is already three surfaces of one fact.
+# (3) WIDER COVERAGE: `main()` also catches `python3 session.py wi-list` run straight from
+# a lane, which never passes through this script at all.
+#
+# THAT STOPPED BEING TRUE, and this is the comment that said to say so. `poga lanes` used
+# to be the one `require_repo` verb that never execd `session.py`; since WI-0157 it shells
+# out to `session.py lane-identity` for the LANE column. It still gets no staleness line,
+# now for a different reason: `lane-identity` is in `CHECKOUT_QUIET_VERBS`, deliberately, so
+# that a display column cannot buy a network fetch. What it reads is still worktrees, refs
+# and the coordination store — all shared, none stale in this sense.
+
+lane_taken() {
+  # A lane N is TAKEN if its worktree dir exists OR its branch exists (a leftover
+  # branch means a crashed/un-landed lane — never silently reuse it).
+  local n="$1"
+  [ -e "$ROOT/.claude/worktrees/poga-$n" ] && return 0
+  git show-ref --verify --quiet "refs/heads/worktree-poga-$n" && return 0
+  return 1
+}
+
+alloc_lane_local() {
+  # Lowest free lane (ADR-0057 D4 reusable pool: folder count is the high-water mark
+  # of SIMULTANEOUS sessions, not of sessions ever run).
+  #
+  # CHECK-THEN-ACT, and that is the WI-0185 bug: nothing sits between the check and the
+  # act, so two launches at the same instant both see poga-1 free and both try to create
+  # it. Kept only as the fail-open fallback for a member whose session.py predates
+  # `lane-alloc` — the front door is alloc_lane below.
+  local n=1
+  while lane_taken "$n"; do n=$((n + 1)); done
+  echo "poga-$n"
+}
+
+alloc_lane() {
+  # WI-0185: DRAW the lane, never compute it. `session.py lane-alloc` takes the name
+  # exclusively in the shared coordination store — the same atomic create that arbitrates
+  # ADR and WI numbers — so of two racing launches exactly one wins poga-1 and the other
+  # is handed poga-2 instead of dying on `git worktree add`.
+  #
+  # THE FALLBACK IS DELIBERATE, and it is the same three-way contract poga_preflight_gate
+  # documents: this script ships byte-identical to every member, and a member whose
+  # session.py predates the verb answers argparse's exit 2. Bricking every launch there
+  # would turn a missing feature into a missing capability. It degrades to the old racy
+  # loop and SAYS SO on stderr, so a silent single-machine assumption is never made.
+  local lane=""
+  if [ -f "$ROOT/session.py" ]; then
+    lane="$("${PY:-python3}" "$ROOT/session.py" lane-alloc 2>/dev/null || true)"
+  fi
+  case "$lane" in
+    poga-[0-9]*) echo "$lane"; return 0 ;;
+  esac
+  echo "poga: NOTE — \`session.py lane-alloc\` unavailable; falling back to the unlocked" >&2
+  echo "poga:        lane scan. Two simultaneous launches can still collide (WI-0185)." >&2
+  alloc_lane_local
+}
+
+poga_preflight_gate() {
+  # ADR-0096 / WI-0149. Refuse to create a lane on a machine that provably cannot host a
+  # session, and say which precondition and how to fix it — instead of letting
+  # `claude --worktree` fail with a message about a dialog, which would hand the
+  # operator a command to type in his own terminal instead of a diagnosis.
+  #
+  # PLACEMENT is load-bearing: this must run BEFORE `alloc_lane`, for the same reason
+  # ADR-0082 D4 resolves the runtime first — a refusal after the worktree and branch exist
+  # is confusing to read and leaves litter behind (WI-0105).
+  #
+  # THE EXIT CONTRACT IS THREE-WAY, and the third case is why this is not a bare `if`:
+  #   0            every gate check passed (or only warned) -> launch
+  #   1            a check PROVED a precondition broken     -> refuse, it printed why
+  #   anything else  the gate could not run at all          -> LAUNCH, with a note
+  #
+  # That last branch is deliberate. This script is pushed byte-identical to every member,
+  # and a member whose session.py predates `preflight` answers exit 2 from argparse. A
+  # gate that blocked there would brick every launch on every un-migrated member the
+  # moment poga shipped ahead of session.py — turning a missing FEATURE into a missing
+  # CAPABILITY. It fails open and says so on stderr, so the degradation is visible rather
+  # than silently assumed to be a pass.
+  # The narrow bypass, POGA_SKIP_PREFLIGHT_CHECKS=onboarding,workspace-trust (WI-0463),
+  # is read by `session.py preflight --gate` itself, so it needs nothing here.
+  if [ "${POGA_SKIP_PREFLIGHT:-}" = "1" ]; then
+    echo "poga: NOTE — POGA_SKIP_PREFLIGHT=1, launch preconditions NOT checked." >&2
+    return 0
+  fi
+  [ -n "$ROOT" ] || return 0
+  [ -f "$ROOT/session.py" ] || return 0
+
+  # `rc=0; cmd || rc=$?` — NOT a bare call. This script runs under `set -e`, where a
+  # simple command exiting nonzero terminates the shell before the next line executes.
+  # A bare invocation therefore killed poga on ANY nonzero exit, which meant the D6
+  # fail-open branch below could never run: an un-migrated member whose session.py
+  # answers argparse's exit 2 had its launch bricked by the very code written to keep
+  # it working. Found by running it, not by the tests — the shell tests read the
+  # source, and the source looked right.
+  local rc=0 errfile
+  errfile="$(mktemp)"
+  "${PY:-python3}" "$ROOT/session.py" preflight --gate 2>"$errfile" || rc=$?
+
+  if [ "$rc" -eq 0 ]; then
+    cat "$errfile" >&2          # UNKNOWN warnings: printed, never swallowed (D4)
+    rm -f "$errfile"
+    return 0
+  fi
+  # EXIT 1 IS TWO THINGS, and only one of them is a verdict. A check that PROVED a
+  # precondition broken exits 1 — and so does an unhandled Python traceback. Reading
+  # both as "refuse, it printed its remedy" narrates a crash to the operator as a
+  # considered judgement about their machine (WI-0180). The traceback banner is the
+  # discriminator, and a crash proves nothing, so it degrades into the fail-open path
+  # below rather than blocking a launch on a bug in the gate itself.
+  if [ "$rc" -eq 1 ]; then
+    if ! grep -q '^Traceback (most recent call last):' "$errfile"; then
+      cat "$errfile" >&2        # the refusal, with its remedy
+      rm -f "$errfile"
+      exit 1
+    fi
+    poga_preflight_capture "$errfile" "$rc" crashed
+    return 0
+  fi
+  # Could not run at all. The captured stderr is USUALLY an argparse usage dump about a
+  # verb this member does not have yet — noise on every launch, and not the operator's
+  # problem — so it does not go to the terminal.
+  #
+  # It used to be DELETED here, and that was the bug (WI-0180). The justification was
+  # that rc>=2 means "this member predates the verb," which holds for an un-migrated
+  # member and is false everywhere the verb exists: there, rc>=2 is a REAL failure whose
+  # only record was being destroyed one line before the operator was told it happened.
+  # An intermittent skip was therefore undiagnosable by construction — re-running cannot
+  # recover evidence that was deleted at the moment it was produced. Keep the terminal
+  # quiet AND keep the evidence: the stderr goes to the shared coord store, and the note
+  # names where. No extra process is spawned, so the rule of no cost on the startup path
+  # is unaffected.
+  poga_preflight_capture "$errfile" "$rc" "did not run"
+  return 0
+}
+
+poga_preflight_capture() {
+  # Park a failed preflight's stderr where the SESSION that is about to open can read it,
+  # and say so in one line. Best-effort by contract — this runs on the launch path, so no
+  # branch here may fail a launch (`set -e` is why every fallible step is guarded).
+  #
+  # The record lives beside the other coordination state at `<git-common-dir>/poga-coord/`,
+  # which is the one directory every lane and the main checkout resolve to the same place.
+  # It is deliberately NOT a COORD_KINDS member, for the reason `_dispatch_dir` gives: this
+  # is not a hold, so it must survive the TTL reaper and lane teardown — the record is
+  # written moments before a lane opens and would otherwise be swept by the lane it is for.
+  #
+  # ANCHORED ON $ROOT, never on $PWD. `git rev-parse` answers about the current directory,
+  # and the record belongs to the repo whose preflight just failed — the same repo the gate
+  # ran `$ROOT/session.py` from, and the one whose session is about to read this. The two
+  # agree on the normal launch path, which is exactly why a bare `git rev-parse` looked
+  # correct; it was the test fixture that proved otherwise by filing its stub failures into
+  # the FEDERATION's own coordination store instead of its temp repo.
+  local errfile="$1" rc="$2" what="$3" common="" dir="" dest=""
+  common="$(git -C "$ROOT" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
+  [ -n "$common" ] || common="$ROOT/.git"
+  dir="$common/poga-coord/preflight-failures"
+  if mkdir -p "$dir" 2>/dev/null; then
+    dest="$dir/$(date -u +%Y%m%dT%H%M%SZ)-$$.txt"
+    {
+      echo "# preflight $what (exit $rc)"
+      echo "when:   $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+      echo "root:   $ROOT"
+      echo "cwd:    $PWD"
+      echo "python: ${PY:-python3}  (PATH python3: $(command -v python3 2>/dev/null || echo '<not found>'))"
+      echo "path:   $PATH"
+      echo "--- stderr ---"
+      cat "$errfile"
+    } >"$dest" 2>/dev/null || dest=""
+  fi
+  rm -f "$errfile"
+  echo "poga: NOTE — preflight $what (exit $rc); launch preconditions unverified." >&2
+  if [ -n "$dest" ]; then
+    echo "poga:        reason captured at $dest — your Architect reads it at session start." >&2
+  else
+    echo "poga:        the reason could NOT be captured; this launch leaves no record." >&2
+  fi
+}
+
+poga_board_ensure() {
+  # WI-0028 / consultant B8: make sure the board (an optional consumer) is up when
+  # a lane launches — the board's `no-server-outlives-its-session` exemption rests on
+  # THIS lifecycle, not on the board's own idle timeout (its reaper resets on any lane at
+  # all, so a busy fleet keeps a board alive indefinitely).
+  # Best-effort BY CONTRACT: the board is an observer, so nothing here may block, slow,
+  # or fail a lane — every path is silent and non-fatal, and an unconfigured machine is
+  # a no-op. The command comes from the gitignored machine-local `poga.local` (the
+  # decided answer to the brief's env-var-vs-dotfile open question: a dotfile survives
+  # the non-login shells poga actually launches from — dispatch, hooks — where a
+  # profile export never loads; an env var already set still wins if the file is
+  # absent). Repo paths and ports are machine data (P3), so the tracked half is only
+  # `poga.local.example`; the board's own `--ensure` is idempotent and fronts a
+  # matching incumbent silently, so repeated lane launches cost nothing.
+  # WI-0154: WHERE THE BOARD IS, IS A MACHINE FACT, NOT A REPO FACT. Read out of
+  # `$ROOT/poga.local` alone, one truth needed a hand-maintained copy in every member
+  # checkout on the box — one per member — which is the duplicate
+  # shape `single-source-and-deliver` forbids, and it is why the file existed in NONE
+  # of them: nobody writes the same config once per checkout. The machine-level file is the single
+  # source and every member points at it. Sourced MACHINE-FIRST, REPO-SECOND, so the
+  # repo-local export is the one that stands and a member that genuinely needs its own
+  # board keeps the override; existing precedence (a file beats an inherited env var)
+  # is unchanged. `$HOME` is tested rather than assumed: unset, `~` still expands via
+  # getpwuid, which would let a test harness with a scrubbed environment reach the
+  # developer's real config and start a real server (`ambient_fixture`'s subject).
+  [ -n "${HOME:-}" ] && [ -f "$HOME/.config/poga/poga.local" ] \
+    && . "$HOME/.config/poga/poga.local" 2>/dev/null
+  [ -f "$ROOT/poga.local" ] && . "$ROOT/poga.local" 2>/dev/null
+  [ -n "${POGA_BOARD_CMD:-}" ] || return 0
+  ( eval "$POGA_BOARD_CMD" >/dev/null 2>&1 & ) || true
+}
+
+is_resident_runtime() {
+  # A member whose Architect launches from a PAD outside the repo declares
+  # `pad_dir`. Read plainly — there is no CFG in shell — and treat any failure as "no".
+  "${PY:-python3}" - "$ROOT/session.config.json" <<'PY' 2>/dev/null
+import json, sys
+try:
+    v = json.load(open(sys.argv[1])).get("pad_dir")
+except Exception:
+    sys.exit(1)
+sys.exit(0 if isinstance(v, str) and v.strip() else 1)
+PY
+}
+
+# The opening message every lane starts on. Fleet-wide and byte-identical, like the rest
+# of this script: every member runs the session-start protocol and every member identifies
+# itself. An operator-supplied prompt wins over this; nothing else suppresses it.
+#
+# It does NOT ask for the work-item list. A board, where one runs, is where the list lives,
+# and the session-start protocol already obliges the session to recommend two or three items
+# and say why — so asking for a list here duplicated a surface that renders it better and an
+# instruction the protocol already carries ([P16](principles/master.md#p16--avoid-duplication)).
+# The original text was hardcoded fleet-wide on the operator's session-~105 override of a per-system
+# config key; this narrowing is his call too, session ~229.
+POGA_SESSION_PROMPT="run your startup and tell me who you are"
+
+# Flags that CONSUME the next argument, so `poga --model sonnet` is not mistaken for an
+# operator-supplied prompt. Deliberately short and additive: an unlisted value-taking
+# flag only costs a skipped injection (the operator gets today's promptless session),
+# never a mangled command line — the safe direction to fail in.
+POGA_VALUE_FLAGS=" --model --agent --agents --settings --add-dir --permission-mode --append-system-prompt --allowedTools --allowed-tools --disallowedTools --disallowed-tools "
+
+has_operator_prompt() {
+  # True when the operator supplied their own trailing prompt — theirs wins, we inject
+  # nothing. A bare token is a prompt UNLESS it is the value of a value-taking flag.
+  local prev="" a
+  for a in "$@"; do
+    case "$a" in
+      -*) prev="$a" ;;
+      *)
+        case "$POGA_VALUE_FLAGS" in
+          *" $prev "*) : ;;   # this token is a flag's value, not a prompt
+          *) return 0 ;;
+        esac
+        prev=""
+        ;;
+    esac
+  done
+  return 1
+}
+
+# ADR-0082 D2: `-r` / `--runtime` is POGA'S flag, not the agent's. It is CONSUMED here and
+# never forwarded — no runtime knows what `-r` means, so passing it through would turn our
+# own flag into a mangled command line for the thing we just launched. Sets two globals:
+# POGA_RUNTIME_REQ (empty = the registry default) and POGA_ARGS (everything else, in order).
+POGA_RUNTIME_REQ=""
+POGA_ARGS=()
+parse_runtime_flag() {
+  POGA_RUNTIME_REQ=""
+  POGA_ARGS=()
+  local expect=0 a
+  for a in "$@"; do
+    if [ "$expect" -eq 1 ]; then POGA_RUNTIME_REQ="$a"; expect=0; continue; fi
+    case "$a" in
+      -r|--runtime) expect=1 ;;
+      --runtime=*)  POGA_RUNTIME_REQ="${a#--runtime=}" ;;
+      -r=*)         POGA_RUNTIME_REQ="${a#-r=}" ;;
+      *)            POGA_ARGS+=("$a") ;;
+    esac
+  done
+  if [ "$expect" -eq 1 ]; then
+    echo "poga: -r/--runtime needs a value (e.g. 'poga -r c')." >&2
+    echo "      roster: python3 $ROOT/session.py runtime-resolve --list" >&2
+    exit 2
+  fi
+}
+
+# Create the lane's worktree, reusing its branch if one already exists. Extracted because
+# BOTH non-native launch paths need it — the resident-runtime pad, and (new) any
+# runtime with no worktree flag of its own. Same naming as the native path, so `lanes`, the
+# reaper, the coordination store and `session.py end` all see exactly what they expect.
+create_lane_worktree() {
+  local lane="$1"
+  if ! git show-ref --verify --quiet "refs/heads/worktree-$lane"; then
+    git worktree add -b "worktree-$lane" ".claude/worktrees/$lane" >&2
+  else
+    git worktree add ".claude/worktrees/$lane" "worktree-$lane" >&2
+  fi
+}
+
+# ADR-0082 D1/D7 — the wrapper owns PREP and SUPERVISE for the runtimes it launches
+# itself.
+#
+# Reachable ONLY from the two paths where poga created the worktree. The native
+# `--worktree` path deliberately does not call this: there the lane does not exist until
+# the runtime creates it, so there is nowhere to prep, and that path is Claude's, which
+# already binds both phases through its own hooks. Inverting Claude means moving hook
+# wiring out of every member's settings.json — a standard bump that ADR-0082's Breaking
+# note says ships with WI-0055 and WI-0017 as one version, not three.
+#
+# Both steps are best-effort by design. A lane that could not prep still runs — the
+# runtime opens its own journal, which is exactly today's behaviour. A session that could
+# not be watched still runs — it falls back to having no liveness evidence, which is what
+# a non-Claude lane has today anyway. Neither is worth refusing to start a session over.
+POGA_SESSION_CONTEXT=""
+POGA_SESSION_CONTEXT_ABS=""
+# The embed cap, mirroring SESSION_CONTEXT_EMBED_CAP in sessionlib/config.py. Kept as a
+# literal rather than shelled out of Python because delivery must not acquire a new way
+# to fail: a python call here that errored would cost the lane its canon, and the number
+# changes at most once a decade. config.py carries the measurement behind it.
+POGA_CONTEXT_EMBED_CAP=262144
+# WI-0105: reached ONLY when `exec` failed to launch at all — under `shopt -s execfail`
+# a failed exec returns here instead of killing the shell, and a successful one never
+# returns. Everything prep built is still on disk with no agent behind it: a worktree, a
+# branch, a `.live` marker, a prep marker naming a session that will never start, and an
+# 81k session-context. Left alone it is litter only the operator could remove, because the
+# obvious cleanup (`git branch -D`) is denied by our own guard.
+#
+# The rollback carries its own predicate and REFUSES if the lane turns out to hold
+# anything — so this is safe to call unconditionally on a path that only runs when the
+# launch demonstrably did not happen.
+launch_failed() {
+  local lane="$1" cmd="$2"
+  echo "poga: FAILED to launch '$cmd' — rolling back lane '$lane'." >&2
+  "${PY:-python3}" "$ROOT/session.py" lane-rollback --lane "$lane" \
+    --reason "exec '$cmd' failed to launch" >&2 || \
+    echo "poga: rollback refused or failed — inspect with \`poga lanes\`." >&2
+  exit 127
+}
+
+# The `exec` wrapper, and the shape here is load-bearing — MEASURED, not reasoned.
+#
+# `shopt -s execfail` alone is not enough under `set -e`: a failed exec still terminates
+# the shell before the next line runs, and — the part that is genuinely surprising —
+# even `exec … || handler` does NOT rescue it, because errexit treats the failed exec as
+# fatal regardless of the `||` context. Both forms were written, run, and observed to
+# kill the shell with the rollback never firing; only explicitly dropping errexit around
+# the exec works. This is `verify-in-the-created-configuration`: the first two versions
+# read correctly and were wrong, and running them is the only thing that said so.
+#
+# A successful exec never returns, so everything after it is failure-only by
+# construction.
+exec_or_rollback() {
+  local lane="$1"; shift
+  local cmd="$1"
+  set +e
+  exec "$@"
+  local rc=$?
+  set -e
+  launch_failed "$lane" "$cmd"
+  return $rc
+}
+
+# WI-0389 — the delivery boundary, where prep's stdout stops being taken on trust.
+#
+# The contract `prep_and_supervise` states in its own comment is ONE line naming a
+# readable file, and until this function existed nothing checked it: the raw stdout was
+# joined onto the lane root and `deliver_the_context` interpolated the result into the
+# opening prompt. That is not a hypothetical. A lane handed a worktree whose journal is
+# still open takes `start --prep`'s ADR-0051 already-open early return, which prints a
+# multi-line advisory block instead of a path — and a Codex lane in poga-11 was OBSERVED
+# on 2026-09-18 being told to `Read === SESSION START (already open) ===` and then to run
+# `session.py show === SESSION START (already open) === --bytes 0-40000`. Eleven unclosed
+# journals were open on this machine that day; every lane handed one reproduces it, and
+# the only notice went to a stderr nobody reads once a detached pane scrolls.
+#
+# TWO PREDICATES, AT THE DOOR: a single line, and it names a file this process can read.
+# A multi-line banner, a path to nothing, and a line of prose are ONE class — the caller
+# broke its own contract — and none of the three may reach the template. The check is
+# here rather than inside the interpolation because the template is CORRECT; it was
+# handed a value of the wrong shape. A guard mid-render would have to decide what "looks
+# like a path" with the banner already in hand.
+#
+# REFUSAL IS NOT SILENCE, AND NOT A POINTER AT NOTHING. Canon delivery degrades
+# embed -> point, never -> nothing, but that ladder assumes a payload EXISTS to point at;
+# it has no rung for "the address is not an address". So a refusal names a real file or
+# names nothing, says which on stderr, and leaves the runtime to open its own journal —
+# which is the pre-D5 behaviour, and strictly better than handing the model an
+# instruction assembled out of a banner.
+#
+# NOT FIXED HERE, deliberately: `cmd_start`'s already-open early return ignores `--prep`
+# and prints that banner on stdout regardless, which is the producing end of this.
+# `sessionlib/hooks.py` belongs to a concurrent item and is not this one's to touch.
+# Both ends are worth having anyway — a consumer that validates what it was handed stays
+# right after the producer stops lying, and this one has eleven live producers.
+accept_context_path() {
+  local lane_dir="$1" raw="$2" first=""
+  POGA_SESSION_CONTEXT=""
+  POGA_SESSION_CONTEXT_ABS=""
+  # Nothing to accept. Prep has already said why on stderr; a second note is noise.
+  [ -n "$raw" ] || return 0
+
+  case "$raw" in
+    *$'\n'*)
+      first="${raw%%$'\n'*}"
+      echo "poga: NOTE — prep printed a BLOCK where one path was expected; refusing to" >&2
+      echo "      read it as a filename. It begins: ${first:0:56}" >&2
+      echo "      The runtime opens its own journal and starts without the payload." >&2
+      return 0
+      ;;
+  esac
+
+  # Probed against the same join the assignment below makes — `$raw` IS
+  # `$POGA_SESSION_CONTEXT` by the next line, and testing the composed path is the only
+  # way to ask the question the caller's contract actually poses.
+  if [ ! -r "$lane_dir/$raw" ]; then
+    echo "poga: NOTE — prep named a session context that is not readable: $raw" >&2
+    echo "      The runtime opens its own journal and starts without the payload." >&2
+    return 0
+  fi
+
+  POGA_SESSION_CONTEXT="$raw"
+  # The printed path is relative to the LANE root, which is the runtime's cwd but not
+  # ours yet — `deliver_the_context` runs before the `cd`. Resolve it here, where the
+  # lane root is in hand, so delivery never depends on the caller's cwd.
+  POGA_SESSION_CONTEXT_ABS="$lane_dir/$POGA_SESSION_CONTEXT"
+}
+
+prep_and_supervise() {
+  local lane_dir="$1" rt="$2" prep_out=""
+  # Prep writes the session payload into the lane and prints ONE line: its path,
+  # relative to the lane root, which is the runtime's cwd. That path is D5's delivery
+  # address — `deliver_the_context` below turns it into the opening
+  # prompt. Empty on failure, which degrades to today's behaviour rather than to a
+  # blocked launch. `accept_context_path` is what makes "prints ONE line" a checked
+  # claim rather than a comment (WI-0389); the globals are set THERE, from a value that
+  # passed both predicates, and stay empty otherwise.
+  POGA_SESSION_CONTEXT=""
+  POGA_SESSION_CONTEXT_ABS=""
+  if ! prep_out="$("${PY:-python3}" "$lane_dir/session.py" start --prep --runtime "$rt")"; then
+    echo "poga: prep failed — the runtime will open its own journal instead." >&2
+    prep_out=""
+  fi
+  accept_context_path "$lane_dir" "$prep_out"
+  # $$ is POGA's pid, and exec REPLACES this process while KEEPING that pid — so the
+  # watcher started here is watching the agent itself, with no handoff and no
+  # bookkeeping. Resolution happens in supervise's foreground before it forks, so it
+  # cannot race the adoption that consumes the prep marker.
+  "${PY:-python3}" "$lane_dir/session.py" supervise --pid $$ --detach || \
+    echo "poga: could not start the session watcher — lane runs unsupervised." >&2
+}
+
+# ADR-0082 D5's delivery half, amended by WI-0324: DELIVER the payload prep just wrote,
+# and point at it only when it will not fit.
+#
+# Canon delivery degrades embed -> point, NEVER -> nothing. An Architect that never reads
+# its principles is not bound by them, and a lane whose agent has no canon loaded is a
+# member in name only — so this is not a nicety, it is the entire delivery mechanism for
+# a runtime with no injection channel.
+#
+# WHY EMBED RATHER THAN POINT — measured, not preferred:
+#
+#   * A pointer costs a tool call, and that call's output is truncated at the runtime's
+#     own cap with NO marker the model can see. Across the Codex transcripts measured,
+#     nearly all hit a truncated read inside their first ten tool calls, and about half
+#     re-read `.session-state/session-context.md` several times recovering from it.
+#     The first reviewer session read it truncated, then re-read it in three overlapping
+#     `sed` ranges, then read the whole role doc — 5 truncated calls before any work.
+#   * An embedded payload costs no tool call and cannot be truncated: an 85,056-byte
+#     opening prompt was measured arriving byte-complete (`codex debug prompt-input`).
+#   * Codex's own auto-loaded `AGENTS.md` was measured truncating at exactly 32,768
+#     bytes, silently — smaller than this 41-81 KB payload — and `AGENTS.override.md`
+#     REPLACES `AGENTS.md` rather than stacking with it, so neither is usable without
+#     suppressing the public front door WI-0383 exists to author.
+#
+# Amends the array `args` from the caller's scope (bash dynamic scoping), which is the
+# same array cmd_session is about to exec with.
+#
+# LIMIT, declared rather than papered over: this rewrites the prompt POGA supplies. When
+# the OPERATOR supplied their own prompt, poga does not know which argv element it is —
+# guessing (the last positional? the first?) would corrupt a real command line — so the
+# instruction is surfaced on stderr instead and the agent may start without canon. The
+# real fix is the registry row's argv-shape column (ADR-0082 D3, reserved and unbuilt),
+# which is where "how does THIS runtime take an opening prompt" belongs; Phase 3 settles
+# it against a runtime that actually exists rather than by inventing argv semantics for
+# one nobody has run. `poga resume` delivers nothing at all today — same gap, same fix.
+deliver_the_context() {
+  [ -n "$POGA_SESSION_CONTEXT" ] || return 0
+
+  # Size first. A payload that cannot be read, or that would push argv toward ARG_MAX,
+  # falls back to pointing — which is the behaviour this replaced, so the worst case is
+  # no worse than before.
+  local bytes=0 payload="" instruction=""
+  if [ -n "$POGA_SESSION_CONTEXT_ABS" ] && [ -r "$POGA_SESSION_CONTEXT_ABS" ]; then
+    bytes=$(wc -c < "$POGA_SESSION_CONTEXT_ABS" 2>/dev/null | tr -d ' ') || bytes=0
+  fi
+  [ -n "$bytes" ] || bytes=0
+
+  if [ "$bytes" -gt 0 ] && [ "$bytes" -le "$POGA_CONTEXT_EMBED_CAP" ]; then
+    payload="$(cat "$POGA_SESSION_CONTEXT_ABS")"
+    instruction="$payload
+
+--- end of session-start context ---
+The same bytes are on disk at $POGA_SESSION_CONTEXT if you need to quote them. You have
+already been given all of it above; do not read that file to obtain what you already have."
+  else
+    # The degrade, and it announces itself. A cap that fails silently just re-breaks on
+    # the next entry — the lesson PROFILE_INJECT_CAP was raised to record.
+    if [ "$bytes" -gt "$POGA_CONTEXT_EMBED_CAP" ]; then
+      echo "poga: NOTE — session context is ${bytes}B, over the ${POGA_CONTEXT_EMBED_CAP}B embed cap;" >&2
+      echo "      pointing at it instead. Expect a truncated first read." >&2
+    else
+      echo "poga: NOTE — session context could not be read at $POGA_SESSION_CONTEXT_ABS;" >&2
+      echo "      pointing at it instead." >&2
+    fi
+    instruction="Read $POGA_SESSION_CONTEXT first — it carries your session-start orientation, the principles and universal habits you inherit, and the standard session rituals. It is larger than one read returns: use \`python3 session.py show $POGA_SESSION_CONTEXT --bytes 0-40000\` and continue from the offset it prints, rather than re-reading ranges. Then proceed."
+  fi
+
+  if [ "$POGA_PROMPT_IS_OURS" = "1" ] && [ ${#args[@]} -gt 0 ]; then
+    args[$(( ${#args[@]} - 1 ))]="$instruction
+
+${args[$(( ${#args[@]} - 1 ))]}"
+  else
+    echo "poga: NOTE — canon is at $POGA_SESSION_CONTEXT; your own prompt was left" >&2
+    echo "      untouched, so tell the agent to read it (ADR-0082 D3 argv shape owed)." >&2
+  fi
+}
+
+# ADR-0082 D4 runtime resolution, extracted so `session` and `resume` cannot drift
+# apart on WHICH agent a lane runs (P16). Sets POGA_RT_ID / _CMD / _WT / _GUARDS.
+# Phase 1's promise stands: the defaults below ARE the pre-registry hardcoded launch and
+# the registry only ever REPLACES them — so a repo whose session.py is older than poga
+# still opens a lane, and only an operator who explicitly named a runtime gets a refusal.
+POGA_RT_ID="" POGA_RT_CMD="" POGA_RT_WT="" POGA_RT_GUARDS="" POGA_RT_ARGV_SHAPE=""
+resolve_runtime() {
+  POGA_RT_ID="claude-code"; POGA_RT_CMD="claude"
+  POGA_RT_WT="--worktree";  POGA_RT_GUARDS="native"
+  POGA_RT_ARGV_SHAPE="positional"
+  local rt_out rt_err rt_rc=0
+  rt_err="$(mktemp)"
+  rt_out="$("${PY:-python3}" "$ROOT/session.py" runtime-resolve ${POGA_RUNTIME_REQ:+"$POGA_RUNTIME_REQ"} 2>"$rt_err")" || rt_rc=$?
+  if [ "$rt_rc" -ne 0 ] && [ -z "$POGA_RUNTIME_REQ" ]; then
+    # Nobody asked for a runtime; do not invent a new way for a bare `poga` to fail.
+    rm -f "$rt_err"
+    rt_rc=0
+    rt_out=""
+  fi
+  if [ "$rt_rc" -ne 0 ]; then
+    # VERSION SKEW gets its own message. poga and session.py ship together as byte-identical
+    # substrate, so they are normally in lockstep — but during any upgrade window (or from a
+    # lane whose session.py is ahead of the main checkout poga resolves to) the older one
+    # answers with an argparse dump. Surfacing that raw would break D4's whole promise: the
+    # operator would read "invalid choice" and go hunting for a typo in their own command.
+    if grep -q "invalid choice: 'runtime-resolve'" "$rt_err" 2>/dev/null; then
+      echo "poga: this repo's session.py predates the runtime registry (ADR-0082)." >&2
+      echo "      poga and session.py ship together — refresh the substrate, or land the" >&2
+      echo "      lane that adds it, before selecting a runtime." >&2
+    else
+      cat "$rt_err" >&2
+    fi
+    rm -f "$rt_err"
+    echo "poga: not opening a lane." >&2
+    exit "$rt_rc"
+  fi
+  rm -f "$rt_err"
+
+  # Only overwrite the defaults with what the registry actually answered. An empty answer
+  # means we fell back above, and the pre-ADR-0082 launch stands untouched.
+  if [ -n "$rt_out" ]; then
+    local k v
+    while IFS='=' read -r k v; do
+      case "$k" in
+        POGA_RUNTIME_ID)                                   POGA_RT_ID="$v" ;;
+        POGA_RUNTIME_COMMAND)                              POGA_RT_CMD="$v" ;;
+        POGA_RUNTIME_WORKTREE_FLAG)                        POGA_RT_WT="$v" ;;
+        POGA_RUNTIME_GUARDS)                               POGA_RT_GUARDS="$v" ;;
+        POGA_RUNTIME_ARGV_SHAPE|POGA_RUNTIME_PROMPT_SHAPE) POGA_RT_ARGV_SHAPE="$v" ;;
+      esac
+    done <<< "$rt_out"
+  fi
+
+}
+
+cmd_session() {
+  # A folder with no git repo used to be a dead end here — `require_repo` printed "cd
+  # into a member checkout and re-run" and exited 2. It is now the ENTRY POINT for
+  # standing up a new system (WI-0069): the operator typed `poga` somewhere new because
+  # they want something new there. The intake explains itself and gates on y/N, so a
+  # stray `poga` in ~/Downloads costs one question, not a surprise repo.
+  #
+  # Deliberately keyed on "not a git repository", not on "empty directory" —
+  # `bootstrap --adopt` handles a folder with existing content identically (it commits
+  # what is there as the root commit first), so refusing the non-empty case would block
+  # the adopt path for no reason. Only `session` routes this way; `lanes`/`work`/
+  # `dispatch` keep the plain refusal, since there is nothing to stand up for them.
+  if ! git rev-parse --git-dir >/dev/null 2>&1; then
+    cmd_intake "$@"
+    return
+  fi
+
+  require_repo session
+
+  # Strip our own flag before anything else looks at the argv.
+  parse_runtime_flag "$@"
+  set -- ${POGA_ARGS[@]+"${POGA_ARGS[@]}"}
+
+  # ADR-0082 D4: resolve the runtime BEFORE allocating a lane. A missing binary must not
+  # surface as a raw `no such file or directory` out of `exec` after a worktree and a
+  # branch already exist — confusing to read, and litter to clean up. session.py owns the
+  # table (the test suite that gates every fleet push cannot reach bash) and names the
+  # specific problem on stderr; we preserve its exit code so the REASON survives: 2 unknown
+  # runtime, 3 no launch command configured, 4 command not installed here.
+  # Phase 1 promises NO behaviour change, and that promise has to survive a repo where
+  # session.py is absent or older than poga. So the defaults below are today's hardcoded
+  # launch, and the registry only ever REPLACES them. The rule: **the flag is what opts
+  # you into the registry.** A bare `poga` that cannot consult session.py falls back to
+  # exactly what it did before ADR-0082 and says nothing; an operator who explicitly asked
+  # for a runtime gets a refusal, because silently handing them a different agent than the
+  # one they named would be far worse than failing.
+  resolve_runtime
+  local rt_id="$POGA_RT_ID" rt_cmd="$POGA_RT_CMD"
+  local rt_wt="$POGA_RT_WT" rt_guards="$POGA_RT_GUARDS"
+  local rt_argv_shape="$POGA_RT_ARGV_SHAPE"
+  # EXPORT the resolved runtime into the session we are about to exec. `runtime-resolve`
+  # only ever PRINTED this for us to parse into a local; nothing downstream could see it,
+  # so session.py had no way to learn which agent it was running as and fell back to the
+  # `claude-code` default — recording, for a codex lane, the one fact it could not know
+  # (WI-0061 cause 1). The journal still outranks this: it is an observation, this is the
+  # launcher's intent. Exported on every path below, before any `exec`.
+  export POGA_RUNTIME_ID="$rt_id"
+
+  # ADR-0096: BEFORE alloc_lane, for the ADR-0082 D4 reason — a refusal that arrives
+  # after the worktree and branch exist is litter (WI-0105), not a refusal.
+  poga_preflight_gate
+
+  local lane
+  lane="$(alloc_lane)"
+
+  # One call covers all three exec paths below — `exec` replaces the shell, so this
+  # must precede every one of them (the load-bearing placement the B8 brief named).
+  poga_board_ensure
+
+  # WI-0399, same placement and the same reason: one call, above every exec below.
+  poga_launch_record "$lane"
+
+  local -a args=(${POGA_ARGS[@]+"${POGA_ARGS[@]}"})
+  # Whether the trailing prompt is OURS decides whether `deliver_the_context` may rewrite
+  # it (ADR-0082 D5) — we can safely amend a prompt we wrote, never one the operator did.
+  POGA_PROMPT_IS_OURS=0
+  if ! has_operator_prompt "$@"; then
+    if [ "$rt_argv_shape" != "positional" ] && [ -n "$rt_argv_shape" ]; then
+      args+=("$rt_argv_shape" "$POGA_SESSION_PROMPT")
+    else
+      args+=("$POGA_SESSION_PROMPT")
+    fi
+    POGA_PROMPT_IS_OURS=1
+  fi
+
+  # ADR-0082 D6: say what the lane can actually enforce. A lane whose guards are not the
+  # native PreToolUse set must not look identical to one that has them — that is the whole
+  # failure D6 exists to prevent, and it costs one line to avoid.
+  if [ "$rt_guards" != "native" ]; then
+    echo "poga: NOTE — runtime '$rt_id' guards: $rt_guards (not the native PreToolUse set)." >&2
+  fi
+
+  # WI-0031 Part A: name the terminal after its lane, so a wall of tabs is readable.
+  # Deliberately never a session number — numbers are assigned at LAND, so two live
+  # lanes would transiently show the same one (ADR-0069). The claim step re-titles with
+  # the topic once there is one to show. Session 127: the label carries the PROJECT
+  # too, because lane numbers are per-repo and every project's first lane is 1.
+  set_terminal_title "$(lane_label "$lane")"
+
+  if is_resident_runtime; then
+    # The repo root belongs to the RESIDENT RUNTIME, so `claude --worktree` — which
+    # lands at the worktree root — would boot the resident agent under its own
+    # permission posture, in a workspace the operator believes is an Architect lane.
+    # Create the worktree ourselves and launch from a generated per-lane
+    # pad instead. Same lane naming as the native path, so `lanes`, the reaper, the
+    # coordination store and `session.py end` all see exactly what they expect.
+    echo "poga: resident-runtime member — launching $rt_id lane '$lane' from its own pad" >&2
+    create_lane_worktree "$lane"
+    local pad
+    if ! pad="$("${PY:-python3}" "$ROOT/session.py" lane-pad "$lane")"; then
+      # Leave the worktree in place: it is a valid lane and the reaper knows it. Only
+      # the pad failed, and the fix is named on stderr by session.py.
+      echo "poga: could not build the lane pad — lane '$lane' left in place; see above." >&2
+      exit 2
+    fi
+    prep_and_supervise "$ROOT/.claude/worktrees/$lane" "$rt_id"
+    deliver_the_context
+    cd "$pad"
+    exec_or_rollback "$lane" "$rt_cmd" "${args[@]}"
+  fi
+
+  # A runtime that has its OWN worktree flag does the isolation itself — Claude Code's
+  # `--worktree <lane>` creates .claude/worktrees/<lane> on branch worktree-<lane> and
+  # lands inside it. Unchanged from before ADR-0082; this is still every Claude launch.
+  if [ -n "$rt_wt" ]; then
+    echo "poga: launching $rt_id session in lane '$lane' (worktree .claude/worktrees/$lane, branch worktree-$lane)" >&2
+    exec_or_rollback "$lane" "$rt_cmd" "$rt_wt" "$lane" "${args[@]}"
+  fi
+
+  # No native worktree flag (codex, antigravity, anything new): poga creates the lane and
+  # launches with it as cwd. Deliberately the same two steps the pad path above already
+  # took — the non-Claude launch was mostly written the day the pad path shipped; what was
+  # missing was only the ability to choose it.
+  echo "poga: launching $rt_id session in lane '$lane' (poga-created worktree — runtime has no worktree flag)" >&2
+  create_lane_worktree "$lane"
+  prep_and_supervise "$ROOT/.claude/worktrees/$lane" "$rt_id"
+  deliver_the_context
+  cd "$ROOT/.claude/worktrees/$lane"
+  exec_or_rollback "$lane" "$rt_cmd" "${args[@]}"
+}
+
+# WI-0399 — WRITE DOWN THE PID WE ARE ABOUT TO BECOME.
+#
+# `exec` REPLACES this process image while KEEPING this pid, so `$$` read here IS the
+# runtime's pid from the instant the exec succeeds. That property is already load-bearing
+# for `prep_and_supervise`'s liveness watcher; this records it instead of handing it to a
+# watcher, because the reader is a close that happens hours later in another process.
+#
+# WHY THE WRAPPER AND NOT A HOOK, and this is a requirement rather than a preference: a
+# Claude-only exit path would have to be rebuilt for Codex and Antigravity, and the
+# substrate floor is a set of runtime-agnostic obligations with per-runtime bindings
+# (ADR-0041). `poga` is the one actor present at every launch of every runtime.
+#
+# BEFORE EVERY EXEC, for the same reason `poga_board_ensure` is — `exec` replaces the
+# shell, so anything placed after a launch path never runs at all.
+#
+# `[ -t 1 ]` is the honest read of whether a human can see this terminal, and it decides
+# exactly one thing: whether the close pauses so its summary can be read. A dispatched
+# lane in a detached pane is not a tty, gets no pause, and has its summary read off the
+# board instead.
+#
+# Best-effort in every direction. A launch that cannot be recorded degrades to precisely
+# today's behaviour — a session that sits at its prompt until someone closes the window —
+# which is worth no noise at all on the launch path.
+poga_launch_record() {
+  local lane="$1" attended=""
+  [ -n "$lane" ] || return 0
+  [ -t 1 ] && attended="--attended"
+  "${PY:-python3}" "$ROOT/session.py" lane-launch \
+    --lane "$lane" --pid $$ --runtime "${POGA_RT_ID:-${POGA_RUNTIME_ID:-}}" \
+    ${attended:+$attended} >/dev/null 2>&1 || true
+}
+
+set_terminal_title() {
+  # OSC-0. Only when stderr is a real terminal: piped or captured, the escape would be
+  # literal garbage in someone's log (the same rule the work-item chart's colour follows).
+  # Written to stderr, since stdout may be redirected by a caller reading poga's output.
+  [ -t 2 ] || return 0
+  printf '\033]0;%s\007' "$1" >&2
+}
+
+lane_label() {
+  # `federation lane 1`, not `poga-1`. Lane numbers are allocated PER REPO, so every
+  # project's first lane is 1 and a wall of tabs reads identically. Mirrors session.py's
+  # `_lane_label` — see there for why the lane's own NAME must not change (the worktree
+  # dir, the branch, and the allocator's free-slot check all key on it, and names are
+  # recycled on purpose). System id derived from `architect_id` minus the ADR-0006
+  # `-arch` suffix, never a hand-set display field; repo directory name as the fallback.
+  local lane="$1" sysid n
+  sysid="$("${PY:-python3}" -c 'import json,sys
+try:
+    v = (json.load(open(sys.argv[1])).get("architect_id") or "").strip()
+except Exception:
+    v = ""
+print(v[:-5] if v.endswith("-arch") else v)' "$ROOT/session.config.json" 2>/dev/null)"
+  [ -n "$sysid" ] || sysid="$(basename "$ROOT")"
+  n="${lane##*-}"
+  case "$n" in
+    ''|*[!0-9]*) echo "$sysid $lane" ;;
+    *)           echo "$sysid lane $n" ;;
+  esac
+}
+
+cmd_dispatch() {
+  # A LANE-SPAWNING verb, sibling of `session`/`lanes` — not a work-item CRUD verb, so it
+  # sits here rather than under `poga work`. Anchors on the MAIN checkout like the rest.
+  require_repo dispatch
+  harness_exec "$ROOT/session.py" dispatch "$@"
+}
+
+cmd_dispatch_status() {
+  require_repo dispatch
+  harness_exec "$ROOT/session.py" dispatch-status "$@"
+}
+
+cmd_decisions() {
+  # WI-0288 R3 (5). Read-only batch view of the decisions lanes recorded instead of
+  # asking. Anchors on the MAIN checkout like `poga work` does: the journals a lane
+  # wants to review are the landed ones, and its own tree is as stale as its base.
+  require_repo decisions
+  harness_exec "$ROOT/session.py" decisions "$@"
+}
+
+cmd_show() {
+  # WI-0324 / R4. The bounded reader, under the name the brief asked for it by:
+  # "a section-aware extractor (`poga show <file> --section <heading>`, or equivalent)
+  # is cheaper than teaching every runtime the same arithmetic."
+  #
+  # THE EQUIVALENT EXISTED AND THE NAME DID NOT, which is not a cosmetic gap. The
+  # reading rule shipped into every session context tells the agent to reach for this,
+  # and the degraded delivery path spells it `python3 session.py show`. An agent that
+  # types the name the brief uses got `'show' is not a poga verb` — and worse, got it
+  # AFTER the stale-substrate recovery fired: `show` does exist at origin in session.py,
+  # so `recover_stale_verb` concluded this checkout was behind, refreshed fourteen
+  # harness files, retried, and refused again. A missing verb that is diagnosed as a
+  # stale checkout costs a write to the shared checkout and still does not answer.
+  #
+  # ANCHORED ON THE TREE YOU ARE STANDING IN, and that is the difference from `work`,
+  # `ops` and `decisions`, which all anchor on the main checkout on purpose. Those read
+  # SHARED state, where a lane's own copy is as stale as its base. This one reads a FILE
+  # THE CALLER NAMED, and `render_show` resolves a relative path against the root of the
+  # session.py it runs. Anchored on main, `poga show federation-arch.md` from a lane
+  # would quietly show the trunk's copy of a file the caller is editing — the same class
+  # of wrong answer as a stale read, arriving through the fix for it.
+  require_repo show
+  harness_exec "$(git rev-parse --show-toplevel)/session.py" show "$@"
+}
+
+cmd_drill() {
+  # A dispatch→attach rehearsal with FAKE lanes. Anchors on the main checkout like
+  # `dispatch` does, because the dispatch record it writes lives in the shared coord store.
+  require_repo drill
+  harness_exec "$ROOT/session.py" drill "$@"
+}
+
+cmd_attach() {
+  # ADR-0100's OPERATOR-machine half, and the verb its own work item (WI-0160) is named
+  # after. It was built as a `session.py` subcommand and never wired here, so the first
+  # thing the drill asks you to type was the one thing that did not exist — WI-0158's
+  # rule (every command we print must be executable by the reader we print it to) failing
+  # on the command that opens the windows.
+  #
+  # NOT `require_repo`, and this is the one verb where that is wrong. Every other verb
+  # reasonably operates on "the repo you are standing in"; attach's entire design point is
+  # that it runs on the machine with the WINDOWS rather than the machine with the repo, so
+  # the operator is sitting in a home directory, not a checkout. Demanding a cwd sends them
+  # to `cd` into a repo they only have in order to run this — found live at the first drill
+  # (session ~172), one command after the verb itself was fixed.
+  #
+  # Anchor on cwd's repo when there is one (so a lane still drives its own checkout), else
+  # on the repo this copy of `poga` LIVES in. The `poga install` symlink guarantees the
+  # second exists — it is what put this script on PATH in the first place.
+  local anchor=""
+  if git rev-parse --git-dir >/dev/null 2>&1; then
+    anchor="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
+  else
+    anchor="$(cd "$SCRIPT_DIR" 2>/dev/null && git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" \
+      && anchor="$(dirname "$anchor")" || anchor=""
+  fi
+  if [ -z "$anchor" ] || [ ! -f "$anchor/session.py" ]; then
+    echo "poga: cannot find a member checkout to attach from. You are not in one, and the" >&2
+    echo "copy of poga on your PATH does not live in one either — so there is no" >&2
+    echo "session.config.json to read a terminal or transport from. Re-run \`poga install\`" >&2
+    echo "from a checkout, or cd into one." >&2
+    exit 2
+  fi
+  cd "$anchor" || exit 2
+  harness_exec "$anchor/session.py" attach "$@"
+}
+
+cmd_lanes() {
+  require_repo lanes
+  local clean=0
+  for a in "$@"; do [ "$a" = "--clean" ] && clean=1; done
+  # Trunk from session.config.json (default main); no CFG in shell, so read it plainly.
+  local trunk
+  trunk="$("${PY:-python3}" -c 'import json,sys; print(json.load(open("session.config.json")).get("trunk","main"))' 2>/dev/null || echo main)"
+  # WI-0157: a lane's DURABLE identity, `<slot>TAB<name>` per line, from the one place
+  # that knows the rule. This view used to print the slot and NOTHING else, which is the
+  # worst case in the whole item: `poga-2` named three different sessions across two
+  # machines in one day, and this surface offered no second fact to tell them apart.
+  #
+  # The shell asks the harness rather than deriving the label a second time (P16) --- and
+  # it must not degrade QUIETLY when the harness cannot answer, because a column silently
+  # falling back to slots is indistinguishable from a column of real names, which is the
+  # defect this line exists to remove. `require_repo` has already anchored us on the MAIN
+  # checkout, so the harness answering here is main's, not a lane's.
+  local idmap idmap_ok=1 idmap_why=""
+  if ! idmap="$("${PY:-python3}" session.py lane-identity 2>/dev/null)"; then
+    idmap_ok=0
+    idmap_why="this harness has no \`lane-identity\` verb"
+  elif [ -z "$idmap" ]; then
+    # A DIFFERENT cause, and it must not be reported as the first one. The verb ran and
+    # answered "no lanes I can name" — which happens for a repo whose only lanes are
+    # orphaned branches with no worktree. Saying "no such verb" there would be a loud
+    # WRONG diagnosis, which is its own defect and not an improvement on a quiet one.
+    idmap_ok=0
+    idmap_why="the harness named no lanes"
+  fi
+  echo "poga lanes (trunk=$trunk):"
+  if [ "$idmap_ok" -eq 0 ]; then
+    echo "  NOTE: $idmap_why, so the LANE column below may fall back to" >&2
+    echo "        a project label. SLOTS are recycled addresses, not names (WI-0157)." >&2
+  fi
+  printf '  %-24s %-10s %-26s %s\n' "LANE" "SLOT" "STATE" "MERGED"
+  local found=0
+  # Every worktree- branch is a lane. A branch whose dir is gone was torn down; a branch
+  # whose dir remains has a worktree, which says nothing about whether anyone is in it.
+  while IFS= read -r ref; do
+    [ -z "$ref" ] && continue
+    found=1
+    local name="${ref#worktree-}"
+    local dir="$ROOT/.claude/worktrees/$name"
+    # WI-0140: NOT the word "live". A directory existing proves a worktree exists, not
+    # that any session is in it — this said "live" about every lane nobody had reaped yet,
+    # which is a third definition of the word competing with `lane-enterable`'s (is anyone
+    # in it now) and `recover-lanes`' (is the session provably over). This surface cannot
+    # answer either of those questions, so it stops pretending to and says only what a
+    # directory test actually shows. `poga resume` is named because it is the surface that
+    # does answer the occupancy question.
+    local state="worktree present"
+    [ -e "$dir" ] || state="orphaned-branch (no worktree)"
+    local merged
+    if git merge-base --is-ancestor "$ref" "$trunk" 2>/dev/null; then merged="merged"; else merged="UNMERGED"; fi
+    # The identity is the NAME and leads; the slot keeps its own column, because it is
+    # what `poga resume` and `recover-lanes --lane` are typed with. The two are never
+    # collapsed: that collapse is the bug.
+    local ident=""
+    if [ "$idmap_ok" -eq 1 ]; then
+      ident="$(printf '%s\n' "$idmap" | awk -F'\t' -v n="$name" '$1==n {print $2}' \
+               | head -n 1)" || ident=""
+    fi
+    # A per-row miss is an ORPHANED lane branch: it has a ref but no worktree, so the
+    # harness's scan never sees it and has no session to name it by. That is tier 3, and
+    # `lane_label` above is tier 3 — `federation lane 9`, never the raw slot, which is
+    # the one thing this column must not print.
+    [ -n "$ident" ] || ident="$(lane_label "$name")"
+    [ -n "$ident" ] || ident="$name"
+    # Pad the LANE cell by CHARACTERS, not bytes. `printf %-24s` counts BYTES, and the
+    # `·` separator is two of them in UTF-8, so every identity row drifted one column
+    # left of its own header. `${#ident}` counts characters — under a UTF-8 locale.
+    # Measured: 16 under `en_US.UTF-8`, 18 under `LC_ALL=C` or with LANG unset, which is
+    # what cron, launchd and `env -i` hand you. So under a C locale this computation
+    # degrades to the byte count it replaces and the column drifts exactly as before.
+    # Stated rather than left to be found: the failure is cosmetic in both directions,
+    # which is why it is not worth forcing a locale over.
+    local pad=$(( 24 - ${#ident} ))
+    [ "$pad" -ge 1 ] || pad=1
+    printf '  %s%*s %-10s %-26s %s\n' "$ident" "$pad" "" "$name" "$state" "$merged"
+    if [ "$clean" -eq 1 ] && git merge-base --is-ancestor "$ref" "$trunk" 2>/dev/null; then
+      if git branch -d "$ref" >/dev/null 2>&1; then
+        echo "         -> deleted merged lane branch $ref"
+      fi
+    fi
+  done < <(git for-each-ref --format='%(refname:short)' 'refs/heads/worktree-*')
+  [ "$found" -eq 0 ] && echo "  (none)"
+  [ "$clean" -eq 1 ] && git worktree prune && echo "  pruned stale worktree admin entries"
+  echo
+  echo "note: a lane marked UNMERGED never landed — its work is safe on the branch;"
+  echo "      resume it and run \`python3 session.py merge\` from the lane to land it."
+  echo "      this view answers neither liveness question: \`poga resume\` says which"
+  echo "      lanes are free to ENTER, \`poga recover\` which sessions are provably OVER."
+  echo "      LANE is the durable name — machine plus claimed item, or machine plus the"
+  echo "      session-id tail. SLOT is an ADDRESS: freed on teardown and reissued, so it is"
+  echo "      what you TYPE at \`poga resume\`, never what you cite to name a piece of work."
+}
+
+# bootstrap / restore are the ADR-0061 lifecycle verbs. They share ONE seven-phase
+# pipeline in poga_cli.py (restore = bootstrap + hydrate), so this wrapper just hands
+# the whole argv over — no per-verb logic here, which would be a second orchestration.
+#
+# FEDERATION-ONLY. poga_cli.py + bootstrap.py are not shipped to members (only this
+# wrapper, session.py and standard_check.py are), so these verbs resolve against
+# SCRIPT_DIR — the checkout this copy of poga physically lives in — not against ROOT,
+# the repo the caller is standing in. On a member copy poga_cli.py is simply absent,
+# and that must say so plainly rather than surface as a python "no such file".
+# work — the work-item store (ADR-0073/0074). A thin, deliberate front door onto
+# `session.py`'s `wi-*` subcommands.
+#
+# Why this exists rather than telling people to run `session.py wi-move` (session ~103:
+# once code manages the store, it needs a command people actually type). Two problems, both
+# ergonomic until they aren't:
+#
+#   1. The commands live in `session.py` — a file whose name says "session ritual." The
+#      lifecycle CLI anyone actually types is `poga`, and it exposed nothing about work
+#      items at all, so the discoverable command and the real command were different.
+#   2. EVERY worktree carries its own `session.py`, and a lane's copy is whatever it was
+#      cut with. Running the store's CLI from a lane can therefore drive TODAY's data
+#      with LAST WEEK's tool — the same class as the script-relative bug ADR-0070 fixed
+#      for poga itself. `require_repo` already anchors on the MAIN checkout, so routing
+#      through here makes "which copy" answerable once instead of per-invocation.
+#
+# Verbs map to `wi-<verb>`; the claim trio passes through unprefixed since claims are
+# coordination, not store state. Bare `poga work` lists.
+cmd_work() {
+  # WI-0169 — `renumber` is the ONE store verb that must NOT anchor on the main checkout,
+  # and it is handled before `require_repo` for exactly that reason.
+  #
+  # Every other verb here edits the SHARED store, which lives in main, so re-execing
+  # there is what makes a lane drive the one real store instead of its frozen copy.
+  # `renumber` is the opposite case: its subject is a colliding item file that exists
+  # ONLY in the lane (that is what makes it collide), and it decides which citations to
+  # follow by diffing the lane's own working tree against the trunk. Run from main it
+  # would find neither the file nor the diff — and would report success having done
+  # nothing, which is the wrong answer wearing the right answer's clothes.
+  #
+  # So it routes to the tree you are standing in, like `poga test` and `poga preflight`.
+  # DELIBERATE, not an oversight: do not "fix" this into `require_repo`.
+  if [ "${1:-}" = "renumber" ]; then
+    shift
+    local here
+    here="$(git rev-parse --show-toplevel 2>/dev/null)" || here=""
+    if [ -z "$here" ]; then
+      echo "poga work renumber: not inside a repository." >&2
+      exit 2
+    fi
+    harness_exec "$here/session.py" wi-renumber "$@"
+  fi
+  require_repo work                      # cd's to the MAIN checkout — see note above
+  local verb="${1:-list}"; shift 2>/dev/null || true
+  case "$verb" in
+    list|chart|show|new|edit|status|move|check|stale|next|render|commit|feed)
+      harness_exec "$ROOT/session.py" "wi-$verb" "$@" ;;
+    claim|release|claims|board-check)
+      harness_exec "$ROOT/session.py" "$verb" "$@" ;;
+    -h|--help|help)
+      cat >&2 <<'EOF'
+poga work — the work-item store (one list; nothing is ever removed)
+
+  poga work [list] [--all]     the list; --all includes done/superseded
+  poga work chart              the whole list as the bordered chart, ready to paste
+  poga work show <id>          one item in full, fields + notes
+  poga work new "<title>" …    draw a number and create (see --help)
+                               --scope harness|product|mixed is REQUIRED: what kind
+                               of work it is, by the capability changed (WI-0323)
+  poga work edit <id> …        title / --notes / --append-notes / --group
+
+  PROSE GOES IN A FILE. --notes and --append-notes take a phrase; anything longer is
+  refused, because backticks and $(...) inside a quoted shell argument are command
+  substitution — the shell runs them and stores the empty result, silently (WI-0289).
+  Use --notes-file / --append-notes-file with a quoted heredoc and nothing is escaped:
+
+      cat > /tmp/notes.md <<'NOTES'
+      ...prose, verbatim...
+      NOTES
+      poga work edit WI-0289 --append-notes-file /tmp/notes.md
+  poga work status <id> …      --status / --section / --blocked-by / --source
+                               --waiting-on <actor> marks that a HUMAN owes this
+                               an answer ('' clears it); an item id goes in
+                               --blocked-by, never here (WI-0408)
+  poga work move <ids…> …      bulk --section / --status; refuses on a bad id
+  poga work check              validate: gaps, fields, blocked-by, successors
+  poga work stale              which live items have a premise that has since moved --
+                               cited code, cited ADRs, cited item ids, blocker status;
+                               lists quoted counts it cannot re-derive, and stamps
+                               `probed:` on the ones that pass (--no-stamp to skip).
+                               Re-verify before building; never auto-closes
+  poga work renumber --all     move this lane's trunk-colliding items onto drawn
+                               numbers (file, H1, notes, claim, blocked-by,
+                               lane-authored citations, provenance). A land already
+                               does this for you — this is the by-hand path, and the
+                               one work verb that runs in THIS tree, not main.
+  poga work commit             save any store files left uncommitted, in BOTH namespaces
+                               (rarely needed — every edit commits itself)
+  poga work next               draw the next id without creating anything
+  poga work render             regenerate ROADMAP.md's Next/Backlog
+  poga work feed               rebuild wi-feed.json (the surface a board renders)
+  poga work board-check        deep probe: is the board live and showing this store?
+  poga work claim|release|claims   lane coordination
+
+Ids take either form: WI-0028 or 28.
+EOF
+      exit 0 ;;
+    *)
+      echo "poga work: unknown verb '$verb' — try \`poga work --help\`." >&2
+      exit 2 ;;
+  esac
+}
+
+# The ops namespace's front door (WI-0125). `poga work` has fronted the wi-* verbs since
+# ADR-0073; the ops verbs (ADR-0076) never got one, so the only way to reach them was
+# `python3 session.py ops-new` — which, run from a lane, writes the LANE's frozen store.
+# No other checkout ever reads that copy. It cost OPS-0004: drawn in a lane, invisible to
+# `poga work list`, deleted, and the number permanently burned because main's allocator
+# had already moved past it.
+#
+# `require_repo` is the whole fix: it anchors on the MAIN checkout and execs THAT
+# session.py, exactly as `cmd_work` does. Same door, same anchor, same receipt.
+cmd_authorize() {
+  # ADR-0112. The operator mints a grant a lane can CITE instead of quoting a peer.
+  # Anchored on the main checkout like `work`/`ops`, and for the same reason: the store
+  # it writes is shared across every lane, so the tree you happen to stand in is not the
+  # thing being addressed.
+  require_repo authorize
+  local verb="${1:-grant}"
+  case "$verb" in
+    grant)
+      shift; harness_exec "$ROOT/session.py" authorize "$@" ;;
+    list|revoke|check)
+      shift; harness_exec "$ROOT/session.py" "authorize-$verb" "$@" ;;
+    -h|--help|help)
+      cat >&2 <<'EOF'
+poga authorize — relay-authorization grants (ADR-0112)
+
+A dispatched lane has no inbound channel, so an approval reaches it as a peer lane's
+prose that it cannot verify. A grant gives the lane something to CITE instead:
+
+  poga authorize                    grant: any lane, any item, routine verbs, 4h
+  poga authorize grant [options]    the same, narrowed
+      --item WI-NNNN                limit to a work item      (repeatable)
+      --lane worktree-poga-N        limit to a lane           (repeatable)
+      --for CLASS                   close land note write     (the default set)
+                                    canon standard fleet      (must be named)
+      --ttl 30m|4h|2d               default 4h
+      --note "..."                  recorded with the grant
+  poga authorize list [--all]       live grants (--all adds expired and revoked)
+  poga authorize revoke G-XXXXXX    end a grant early
+  poga authorize check G-XXXXXX [--for C] [--item I] [--lane L]
+                                    the READ side a lane calls; exit 0 only if GRANTED
+
+THIS IS NOT SECURITY. Every process here runs as you, so anything on this machine can
+write a grant. It proves INTENT AND TIME, not identity — the win is that an authorization
+becomes a durable, auditable record instead of hearsay relayed in prose. Never treat it
+as an access control.
+
+canon / standard / fleet are excluded from the default on purpose: those writes are slow
+and expensive to reverse, so they have to be asked for by name.
+EOF
+      exit 0 ;;
+    *)
+      echo "poga authorize: unknown verb '$verb' — try \`poga authorize --help\`." >&2
+      exit 2 ;;
+  esac
+}
+
+cmd_ops() {
+  # WI-0245 — `renumber` is the ONE ops verb that must NOT anchor on the main checkout,
+  # handled before `require_repo` for exactly the reason `poga work renumber` is: its
+  # subject is a colliding obligation file that exists ONLY in the lane (that is what
+  # makes it collide), and it decides which citations to follow by diffing the lane's own
+  # working tree against the trunk. Run from main it would find neither the file nor the
+  # diff — and would report success having done nothing.
+  #
+  # DELIBERATE, not an oversight: do not "fix" this into `require_repo`.
+  if [ "${1:-}" = "renumber" ]; then
+    shift
+    local here
+    here="$(git rev-parse --show-toplevel 2>/dev/null)" || here=""
+    if [ -z "$here" ]; then
+      echo "poga ops renumber: not inside a repository." >&2
+      exit 2
+    fi
+    harness_exec "$here/session.py" ops-renumber "$@"
+  fi
+  require_repo ops                       # cd's to the MAIN checkout — see cmd_work
+  local verb="${1:-list}"; shift 2>/dev/null || true
+  case "$verb" in
+    next|new|ran|status|edit|show)
+      harness_exec "$ROOT/session.py" "ops-$verb" "$@" ;;
+    commit)
+      # One sweep for both namespaces — `wi-commit` covers ops-items/ since WI-0125.
+      harness_exec "$ROOT/session.py" wi-commit "$@" ;;
+    list|chart)
+      # Obligations are rendered WITH the work items, never as a separate list — one
+      # board, one chart, one startup view. Point rather than grow a second renderer.
+      harness_exec "$ROOT/session.py" "wi-$verb" "$@" ;;
+    -h|--help|help)
+      cat >&2 <<'EOF'
+poga ops — operational obligations (ADR-0076): the things that must be RUN, not built
+
+  poga ops new "<title>" …     draw an OPS number and create it
+                               --cadence daily|weekly|monthly|quarterly|annual (omit = one-time)
+                               --due YYYY-MM-DD  (one-time items only)
+  poga ops ran <id> --result pass|fail|findings [--on DATE] [--notes …]
+                               record a run; rolls `due` forward from the cadence
+  poga ops status <id> …       --status / --cadence / --due / --group
+  poga ops edit <id> …         --title / --notes / --append-notes
+                               (prose goes in --notes-file / --append-notes-file, same
+                               reason as `poga work edit` — WI-0289)
+  poga ops show <id>           one obligation in full, with its run history
+  poga ops next                draw the next id without creating anything
+  poga ops renumber --all      move this lane's trunk-colliding obligations onto drawn
+                               numbers (file, H1, notes, lane-authored citations,
+                               provenance). A land already does this for you — this is
+                               the by-hand path, and the one ops verb that runs in THIS
+                               tree, not main.
+  poga ops commit              save any store files left uncommitted (rarely needed —
+                               every write commits itself)
+  poga ops list|chart          the SHARED list/chart — ops rows render with the items
+
+`findings` is not `fail`: a drill that succeeds at telling you something bad has not
+failed, and a store that cannot tell those apart records the wrong fact.
+EOF
+      exit 0 ;;
+    *)
+      echo "poga ops: unknown verb '$verb' — try \`poga ops --help\`." >&2
+      exit 2 ;;
+  esac
+}
+
+# The release namespace's front door (WI-0402). The third instance of the WI-0125 shape,
+# and the one where the missing door cost the most.
+#
+# A release cut could only ever run from a session standing in the main checkout. Three
+# independent things said so — `_rel_tag_preflight` refuses unless `symbolic-ref HEAD` is
+# the trunk; `_rel_tag_git` runs `git -C ROOT`, and ROOT for a lane IS the lane; and the
+# Claude Code RUNTIME's worktree isolation guard (not `check-bash` — that rule has no
+# source in this repo) refuses a lane's git against the shared checkout outright —
+# and since ADR-0070 every session is a lane. So the cut ended in "and then a person
+# opens the right kind of session", which is the errand this substrate exists to delete.
+#
+# `require_repo` is the whole fix, exactly as it was for `work` and `ops`: it anchors on
+# the MAIN checkout and execs THAT session.py, so the preflight inspects the tree that is
+# actually being released while every refusal it makes stays exactly as strict. An
+# anchored door is not a looser gate — a dirty trunk, an unpushed trunk, an existing tag
+# and an unlabelled item all still stop the cut, and they now stop it after looking at
+# the right tree instead of before looking at the wrong one.
+#
+# WHY THE HARNESS ALSO REFUSES THE BACK DOOR (`_refuse_lane_release_write`): `session.py`
+# is on disk in every lane and its `--help` advertises `release-cut`. A front door only
+# helps if the back door is shut — the same two-surfaces-of-one-fact this script has
+# already been burned by twice.
+cmd_release() {
+  require_repo release                   # cd's to the MAIN checkout — see cmd_work
+  local verb="${1:-list}"; shift 2>/dev/null || true
+  case "$verb" in
+    cut|declare|list|candidates)
+      harness_exec "$ROOT/session.py" "release-$verb" "$@" ;;
+    -h|--help|help)
+      cat >&2 <<'EOF'
+poga release — the project version (ADR-0078/0080/0081/0084)
+
+  poga release list [--stale-days N]
+                               every shipped release, plus any declared major and which
+                               of its ruled-in items have gone quiet
+  poga release candidates [--out PATH]
+                               draft the candidate slate for the next major. Writes NO
+                               theme and makes NO in/out ruling; both stay the operator's
+  poga release declare 7.0.0 --theme "…" [--items WI-0004,…] [--target YYYY-MM-DD]
+                               promise a MAJOR up front. The only door a major comes
+                               through — it is never computed (ADR-0081)
+  poga release cut [--dry-run] [--no-tag] [--override-bump minor|patch --reason "…"]
+                               harvest everything closed-and-unstamped into an immutable
+                               record, tag it, push it, then stamp the items
+
+A CUT PUSHES A TAG, AND A TAG STARTS AN UNATTENDED DEPLOY (ADR-0103). This door is
+reachable from inside a lane, which makes it easier to reach by accident as well as on
+purpose, so `--dry-run` first is the habit — it writes nothing, stamps nothing and
+publishes nothing, and prints the version and the item count it would produce.
+
+Every verb here runs against the MAIN checkout, wherever you type it from. That is the
+point of the door: the tree being released is the tree being inspected. Nothing about
+what the cut demands of that tree is relaxed — it still refuses a dirty trunk, a trunk
+that is not confirmed at origin, an existing local or remote tag, and any shipped item
+with no `impact` label.
+EOF
+      exit 0 ;;
+    *)
+      echo "poga release: unknown verb '$verb' — try \`poga release --help\`." >&2
+      exit 2 ;;
+  esac
+}
+
+cmd_lifecycle() {
+  local cli="$SCRIPT_DIR/poga_cli.py"
+  if [ ! -f "$cli" ]; then
+    echo "poga $1: federation-only verb — not available in this checkout." >&2
+    echo "bootstrap/restore run the ADR-0061 lifecycle pipeline (poga_cli.py), which" >&2
+    echo "ships only to the federation repo. \`session\` and \`lanes\` work everywhere." >&2
+    echo "Run this from the principles-of-good-architects checkout." >&2
+    exit 2
+  fi
+  cd "$SCRIPT_DIR"
+  exec "${PY:-python3}" "$cli" "$@"
+}
+
+# intake — the WI-0069 arm: one command in an empty folder produces a whole system.
+#
+# `poga bootstrap --adopt --create-remote` has always done the entire install from a
+# completely empty directory. The one thing missing was the SPEC: bootstrap.py consumes
+# one, nothing produced one, and the Federation Architect authored it by hand in a
+# federation session. This arm moves that authoring to the point of use.
+#
+# WHY AN AGENT SESSION AND NOT AN ARGPARSE QUESTIONNAIRE. The spec's load-bearing fields
+# — mission_prose, scope_do/scope_dont, voice, system_principles — are judgment, not data
+# entry (P15). A `read`-loop would collect the five required keys and produce a thin
+# Architect, which is the failure mode this exists to avoid. Standing up a competent
+# Architect is the Federation Architect's own job (ADR-0017), so the intake belongs in a
+# session.
+#
+# ORDER MATTERS, AND IT IS the operator's (session ~115): say the spec is missing -> explain what
+# is about to happen -> ask which runtime if `-r` was not given -> y/n -> launch. The
+# runtime question is a shell `read` in the operator's own terminal, not the picker P17
+# forbids; the y/n sits where it belongs, because repo and remote creation are
+# outward-facing.
+#
+# NOTHING IS INSTALLED BEFORE THE AGENT RUNS, deliberately. Only three steps are
+# spec-free (`git init`, `.gitignore`, the byte-identical shared substrate) and they take
+# under a second — but ADOPTED_MARKERS is exactly ["session.py", "CANON.md",
+# "STANDARD.md"] (bootstrap.py:157), so front-loading them would turn an abandoned intake
+# from *nothing changed* into a folder the re-run refuses as a retrofit. Today the run
+# either completes or changes nothing. Keep that.
+POGA_INTAKE_TEMPLATE="bootstrap-kit/intake-prompt.md"
+
+cmd_intake() {
+  parse_runtime_flag "$@"
+  set -- ${POGA_ARGS[@]+"${POGA_ARGS[@]}"}
+
+  local target="$POGA_INVOKED_FROM"
+  local cli="$SCRIPT_DIR/poga_cli.py"
+  local tmpl="$SCRIPT_DIR/$POGA_INTAKE_TEMPLATE"
+
+  # FEDERATION-ONLY, and it must say so BEFORE the interview rather than after. The
+  # agent's last act is `poga bootstrap --adopt --create-remote`, which resolves against
+  # SCRIPT_DIR (see cmd_lifecycle) — so a poga symlinked from a member checkout would
+  # interview the operator for ten minutes and then fail on the install. Refuse up front.
+  if [ ! -f "$cli" ] || [ ! -f "$tmpl" ]; then
+    echo "poga: $target is not a git repository and has no Architect." >&2
+    echo "      Standing one up needs the federation's own poga — this copy lives in" >&2
+    echo "      $SCRIPT_DIR, which does not carry the bootstrap pipeline." >&2
+    echo "      Re-run with the poga from the principles-of-good-architects checkout," >&2
+    echo "      or cd into a member checkout to open a normal session." >&2
+    exit 2
+  fi
+
+  # Already adopted? Say so here rather than at the end of an interview. ADOPTED_MARKERS
+  # (bootstrap.py:157) is exactly these three files; their presence means this folder has
+  # already been through an install, and the honest answer is that re-adopting is a
+  # retrofit, not an intake.
+  #
+  # ORDERED AHEAD OF THE TTY CHECK ON PURPOSE. Whether this folder is already adopted has
+  # nothing to do with whether anyone is watching, so gating it behind interactivity made
+  # a non-interactive run report the wrong reason entirely — "needs a terminal" for a
+  # folder that no terminal would have helped. Caught by the test, not by reading it.
+  if [ -f "$target/session.py" ] && [ -f "$target/CANON.md" ] && [ -f "$target/STANDARD.md" ]; then
+    echo "poga: $target already carries Architect substrate (session.py, CANON.md," >&2
+    echo "      STANDARD.md) — it has been bootstrapped before. Re-running the intake" >&2
+    echo "      would be a RETROFIT, not a fresh adopt, and this arm does not do that." >&2
+    echo "      If the folder is not a git repo, that is the thing to fix first." >&2
+    exit 2
+  fi
+
+  # WHICH INTAKE (WI-0453). The agent-run interview below assumes an operating fleet
+  # federation: an operator profile with real entries in this checkout. Without one —
+  # a fresh clone, the public cut, or a machine that already has a LOCAL federation —
+  # the folder gets `poga init` instead: a few prompts with defaults, a local-only repo,
+  # and a place in the local federation, with no GitHub, no runtime and no existing
+  # federation needed. `--agent-intake` asks for the agent-run interview regardless (not
+  # `--agent`, which is a runtime flag that takes a value), and so does `-r <runtime>`:
+  # naming a runtime is asking for the agent.
+  local force_agent=0 a
+  local rest=()
+  for a in ${POGA_ARGS[@]+"${POGA_ARGS[@]}"}; do
+    if [ "$a" = "--agent-intake" ]; then force_agent=1; else rest+=("$a"); fi
+  done
+  POGA_ARGS=(${rest[@]+"${rest[@]}"})
+  set -- ${POGA_ARGS[@]+"${POGA_ARGS[@]}"}
+  if [ "$force_agent" -eq 0 ] && [ -z "$POGA_RUNTIME_REQ" ]; then
+    local route
+    route="$(cd "$SCRIPT_DIR" && "${PY:-python3}" "$cli" intake-route 2>/dev/null)" || route="agent"
+    if [ "$route" = "init" ]; then
+      echo "poga: $target has no Architect yet — setting it up as a local POGA project" >&2
+      echo "      (\`poga init\`; \`poga new --agent-intake\` runs the agent-led interview instead)." >&2
+      cd "$SCRIPT_DIR"
+      exec "${PY:-python3}" "$cli" init ${POGA_ARGS[@]+"${POGA_ARGS[@]}"}
+    fi
+  fi
+
+  # An interview needs a terminal on both ends. Say which half is missing rather than
+  # blocking on a read that will never return (declare-what-a-check-assumes).
+  if [ ! -t 0 ] || [ ! -t 1 ]; then
+    echo "poga: intake needs an interactive terminal (stdin and stdout) — it asks you" >&2
+    echo "      which runtime to use, whether to create a remote, and confirms before" >&2
+    echo "      creating a repo. Start it from a terminal. For a scripted local-only setup" >&2
+    echo "      use \`poga init --yes\`; or author bootstrap-spec.json yourself and run" >&2
+    echo "      \`poga bootstrap --adopt\` directly." >&2
+    exit 2
+  fi
+
+  # RESUME PATH. A spec already sitting in the folder means a previous intake got as far
+  # as authoring one — re-interviewing would throw that away. Offer the install instead.
+  local have_spec=0
+  [ -f "$target/bootstrap-spec.json" ] && have_spec=1
+
+  # --- step 1: name the missing piece -------------------------------------------------
+  echo >&2
+  if [ "$have_spec" -eq 1 ]; then
+    echo "poga: $target already has a bootstrap-spec.json but no Architect installed." >&2
+    echo "      The spec is the judgment half and it is already written — all that is" >&2
+    echo "      left is the install." >&2
+  else
+    echo "poga: $target has no Architect yet, and standing one up needs a SPEC." >&2
+    echo "      The spec is the system's identity — its mission, what it does and" >&2
+    echo "      deliberately does not do, its voice, its own operating principles." >&2
+    echo "      Every file the install writes is rendered from it, so it cannot be" >&2
+    echo "      guessed or defaulted. It comes out of a conversation." >&2
+  fi
+
+  # --- step 2: explain what is about to happen ---------------------------------------
+  echo >&2
+  echo "  Here is what happens if you continue:" >&2
+  if [ "$have_spec" -eq 0 ]; then
+    echo "    1. An agent session opens IN THIS FOLDER and interviews you — what the" >&2
+    echo "       system is for, what is in and out of scope, how it should behave." >&2
+    echo "    2. It writes bootstrap-spec.json here." >&2
+    echo "    3. It runs the install itself:" >&2
+  else
+    echo "    1. An agent session opens IN THIS FOLDER, reads the spec, and runs the" >&2
+    echo "       install itself:" >&2
+  fi
+  echo "         git init, the standard substrate, role doc + CLAUDE.md + README +" >&2
+  echo "         STATUS.md + ROADMAP.md rendered from the spec, committed locally, and" >&2
+  echo "         the system registered in the portfolio. A PRIVATE GITHUB REPO is created" >&2
+  echo "         and pushed ONLY if you say yes to that question below — local only is" >&2
+  echo "         the default, and a complete setup (WI-0452)." >&2
+  echo >&2
+  echo "  Nothing is written until you answer yes. If you abandon the interview" >&2
+  echo "  partway, this folder is left exactly as it is now." >&2
+  echo >&2
+
+  # --- step 3: which runtime, if `-r` did not already say ----------------------------
+  if [ -z "$POGA_RUNTIME_REQ" ]; then
+    echo "  Which agent should run the intake?" >&2
+    "${PY:-python3}" "$SCRIPT_DIR/session.py" runtime-resolve --list >&2 || true
+    echo >&2
+    printf '  runtime [c]: ' >&2
+    local reply=""
+    read -r reply || true
+    POGA_RUNTIME_REQ="${reply:-c}"
+  fi
+
+  # Resolve BEFORE the y/n, so an unknown alias or an uninstalled binary is a plain
+  # refusal rather than a yes the operator then watches fail (ADR-0082 D4, same reason
+  # cmd_session resolves before allocating a lane).
+  local rt_out rt_id rt_cmd
+  rt_out="$("${PY:-python3}" "$SCRIPT_DIR/session.py" runtime-resolve "$POGA_RUNTIME_REQ")" || {
+    echo "poga: not starting the intake." >&2
+    exit 2
+  }
+  rt_id="$(printf '%s\n' "$rt_out" | sed -n 's/^POGA_RUNTIME_ID=//p')"
+  rt_cmd="$(printf '%s\n' "$rt_out" | sed -n 's/^POGA_RUNTIME_COMMAND=//p')"
+  [ -n "$rt_cmd" ] || { echo "poga: runtime '$POGA_RUNTIME_REQ' has no launch command." >&2; exit 3; }
+  export POGA_RUNTIME_ID="$rt_id"   # see cmd_session — the launcher tier of WI-0061
+
+  # --- step 3b: the remote, asked, never assumed (WI-0452) ---------------------------
+  # Outward-facing, so it is a question with a safe default rather than a side effect of
+  # saying yes to the intake. A shell `read` in the operator's own terminal, not a picker.
+  echo >&2
+  printf '  Create a private GitHub repo and push to it? Local only is complete, and a\n' >&2
+  printf '  remote can be added any time. [y/N]: ' >&2
+  local want_remote="" remote=0
+  read -r want_remote || true
+  case "$want_remote" in
+    y|Y|yes|YES|Yes) remote=1 ;;
+  esac
+
+  # --- step 4: the gate ---------------------------------------------------------------
+  echo >&2
+  printf '  Start the intake in %s, in %s? [y/N]: ' "$rt_id" "$target" >&2
+  local go=""
+  read -r go || true
+  case "$go" in
+    y|Y|yes|YES|Yes) : ;;
+    *) echo "poga: nothing changed." >&2; exit 0 ;;
+  esac
+
+  # --- step 5: render the prompt and launch -------------------------------------------
+  # The prompt is SELF-CONTAINED TEXT, not a pointer. The folder is empty — no role doc,
+  # no CANON.md, no CLAUDE.md — and the runtime may be Codex or Gemini, which would not
+  # read them anyway. Carrying the schema, the interview and the ask-in-prose rules in the
+  # prompt body is what makes this flow runtime-agnostic rather than Claude-only.
+  #
+  # The renderer writes to a temp file and we read it back, rather than the obvious
+  # `prompt="$("${PY:-python3}" - … <<'PY' … PY)"`. A heredoc INSIDE a command substitution breaks
+  # the parser on bash 3.2 — which is what `/usr/bin/env bash` finds on a stock macOS, and
+  # poga ships fleet-wide, so 3.2 is the floor. The failure is a syntax error hundreds of
+  # lines away from the actual construct, so it is worth the two extra lines to avoid.
+  local prompt ptmp
+  ptmp="$(mktemp)"
+  if ! "${PY:-python3}" - "$tmpl" "$target" "$SCRIPT_DIR" "$remote" > "$ptmp" <<'PY'
+import json, pathlib, subprocess, sys
+
+tmpl, target, root = sys.argv[1], sys.argv[2], pathlib.Path(sys.argv[3])
+remote = sys.argv[4] == "1"
+
+def remote_doc_base():
+    """federation_repo_url is the doc-link base every spec carries. Derive it from the
+    federation's own origin — declared state, not a literal pasted into this script."""
+    try:
+        url = subprocess.run(["git", "-C", str(root), "remote", "get-url", "origin"],
+                             text=True, capture_output=True, check=True).stdout.strip()
+    except Exception:
+        return ""
+    return f"{url[:-4] if url.endswith('.git') else url}/blob/main"
+
+def cfg(key, default=""):
+    try:
+        return json.loads((root / "session.config.json").read_text()).get(key) or default
+    except Exception:
+        return default
+
+# user_id is the directory name the federation's own user_profile path declares
+# (`users/<id>/profile.md`) — read the declaration, never infer it from user_name.
+profile = cfg("user_profile", "")
+parts = pathlib.PurePosixPath(profile).parts
+user_id = parts[1] if len(parts) > 2 and parts[0] == "users" else ""
+
+subs = {
+    "TARGET_DIR": target,
+    "POGA": str(root / "poga"),
+    "FEDERATION_ROOT": str(root),
+    "FEDERATION_REPO_URL": remote_doc_base(),
+    "USER_ID": user_id,
+    "USER_NAME": cfg("user_name", ""),
+    "INSTALL_COMMAND": f"{root / 'poga'} bootstrap --adopt"
+                       + (" --create-remote" if remote else ""),
+    "REMOTE_CHOICE": ("yes: create a private GitHub repo and push to it" if remote else
+                      "no: local only. Do not set `repo_owner` or `repo_url` in the spec"),
+}
+text = pathlib.Path(tmpl).read_text(encoding="utf-8")
+for k, v in subs.items():
+    text = text.replace("{{" + k + "}}", v)
+
+# A placeholder that survived substitution would reach the agent as literal `{{X}}` and
+# be interviewed about, or worse, invented. Fail here instead — nothing has changed yet.
+import re
+left = sorted(set(re.findall(r"\{\{([A-Z_]+)\}\}", text)))
+if left:
+    sys.exit("poga: intake prompt has unresolved placeholder(s): " + ", ".join(left))
+print(text, end="")
+PY
+  then
+    rm -f "$ptmp"
+    echo "poga: could not build the intake prompt — nothing changed." >&2
+    exit 2
+  fi
+  prompt="$(cat "$ptmp")"
+  rm -f "$ptmp"
+
+  echo >&2
+  echo "poga: starting intake in $rt_id — $target" >&2
+  set_terminal_title "intake"
+  cd "$target"
+  # Deliberately NO worktree/lane flag: there is no repo to cut a lane from, and the
+  # agent's whole job is to create one here.
+  exec "$rt_cmd" ${POGA_ARGS[@]+"${POGA_ARGS[@]}"} "$prompt"
+}
+
+# install — one-time per-machine installation (2026-07-23 consultant brief). Makes
+# bare `poga` work in every future terminal on THIS machine by symlinking this
+# checkout's script into ~/.local/bin. Purely mechanical (no claude, no lanes, no
+# specs — ADR-0060 shape); user-scope only, never sudo; update is `git pull` because
+# the symlink points at the live checkout. NOT `bootstrap`: bootstrap builds a
+# *system* from a spec; install makes an *existing checkout's CLI* reachable here.
+#
+# ~/.local/bin/poga is a SHARED HOST RESOURCE now that poga ships fleet-wide
+# (choose-shared-host-resource-defaults-for-siblings / P10): N member repos each carry
+# a copy, and each would claim the same link name. That is safe — and deliberately so —
+# because the bytes are byte-identical substrate and ROOT comes from the caller's cwd,
+# so ANY copy correctly drives EVERY repo. Whichever checkout you install from wins the
+# link, and it does not matter which. The one asymmetry: bootstrap/restore resolve
+# against SCRIPT_DIR, so a link installed from a member cannot reach them — it says so
+# (see cmd_lifecycle) instead of failing obscurely. Install from the federation checkout
+# to keep all five verbs reachable.
+cmd_install() {
+  # Anchor the link on the MAIN checkout of whichever repo this copy lives in, not on
+  # SCRIPT_DIR itself: when poga is invoked from inside a lane worktree (or the merge
+  # gate's scratch checkout), SCRIPT_DIR is ephemeral and linking to it would leave a
+  # DANGLING symlink the moment that worktree is removed. Every linked worktree shares
+  # one common git dir, so its parent is the durable main tree. Falls back to SCRIPT_DIR
+  # if this copy somehow is not in a repo.
+  local anchor
+  anchor="$(cd "$SCRIPT_DIR" && git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" \
+    && anchor="$(dirname "$anchor")" || anchor="$SCRIPT_DIR"
+  local bin="$HOME/.local/bin" link="$HOME/.local/bin/poga" target="$anchor/poga"
+  local changed=0 needs_new_terminal=0
+  mkdir -p "$bin"
+  if [ -L "$link" ]; then
+    local cur want
+    cur="$("${PY:-python3}" -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$link")"
+    want="$("${PY:-python3}" -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$target")"
+    if [ "$cur" = "$want" ]; then
+      echo "poga install: symlink already correct ($link -> $target)"
+    else
+      # The machine-migration case: converge, with notice (old -> new).
+      ln -sf "$target" "$link"
+      echo "poga install: repaired symlink — was -> $cur, now -> $target"
+      changed=1
+    fi
+  elif [ -e "$link" ]; then
+    # Symlink, never copy — and never overwrite something this tool didn't create.
+    echo "poga install: REFUSED — $link exists and is a plain file, not a symlink this" >&2
+    echo "tool made. A copied script silently rots against the repo it drives; move it" >&2
+    echo "aside and re-run. Nothing changed." >&2
+    exit 2
+  else
+    ln -s "$target" "$link"
+    echo "poga install: linked $link -> $target"
+    changed=1
+  fi
+  case ":$PATH:" in
+    *":$bin:"*) : ;;
+    *)
+      # This shell's PATH may not be an interactive shell's PATH: a non-interactive ssh
+      # skips the login shell's rc file entirely, so a PATH-based check would append a
+      # duplicate of a line the rc file already carries. So the append is gated on the
+      # FILE's content, not this shell's PATH: converging, never accreting.
+      #
+      # WHICH rc file is the user's login shell's ($SHELL), not always ~/.zshrc (WI-0467):
+      # on a bash host the line went where no new terminal reads it. zsh -> ~/.zshrc (the
+      # macOS default, unchanged); bash -> ~/.bashrc, or ~/.bash_profile on macOS, whose
+      # terminals open LOGIN shells that do not read ~/.bashrc. Any other shell gets the
+      # exact line to add rather than a write to a file it may never read. An unset $SHELL
+      # on macOS keeps the old ~/.zshrc.
+      local sh_name os_name rc="" rc_label=""
+      sh_name="${SHELL:-}"; sh_name="${sh_name##*/}"
+      os_name="$(uname -s 2>/dev/null)"
+      [ -n "$sh_name" ] || { [ "$os_name" = "Darwin" ] && sh_name=zsh; }
+      case "$sh_name" in
+        zsh) rc="$HOME/.zshrc"; rc_label="~/.zshrc" ;;
+        bash)
+          if [ "$os_name" = "Darwin" ]; then
+            rc="$HOME/.bash_profile"; rc_label="~/.bash_profile"
+          else
+            rc="$HOME/.bashrc"; rc_label="~/.bashrc"
+          fi ;;
+      esac
+      if [ -z "$rc" ]; then
+        echo "poga install: ~/.local/bin is not on PATH, and this installer does not write the"
+        echo "poga install: startup file for your shell (${SHELL:-unset}). Add this line to it:"
+        echo '    export PATH="$HOME/.local/bin:$PATH"'
+        needs_new_terminal=1
+      elif grep -qsF 'export PATH="$HOME/.local/bin:$PATH"' "$rc" 2>/dev/null; then
+        echo "poga install: $rc_label already exports ~/.local/bin (this shell's PATH just doesn't show it)"
+        # This shell still cannot resolve `poga`; say how, rather than "now works".
+        needs_new_terminal=1
+      else
+        printf '\nexport PATH="$HOME/.local/bin:$PATH"\n' >> "$rc"
+        echo "poga install: ~/.local/bin was not on PATH — added an export line to $rc_label"
+        needs_new_terminal=1
+      fi
+      ;;
+  esac
+  # Dependency sanity — report, never fail: these are what session/lanes need at runtime.
+  local dep
+  # `$PY`, not `python3`: since WI-0328 poga runs the interpreter it resolved, so a
+  # check that PATH carries *some* python3 answers a question nobody is asking.
+  for dep in git "${PY:-python3}" claude; do
+    command -v "$dep" >/dev/null 2>&1 \
+      || echo "poga install: note — '$dep' not found on PATH (needed at runtime)."
+  done
+  # Honest exit (ADR-0061 D2 spirit): plain success ONLY when nothing is owed.
+  if [ "$needs_new_terminal" -eq 1 ]; then
+    # Not `rehash`: it rebuilds zsh's command-hash table, it does not read ~/.zshrc, so the
+    # PATH export never reaches the shell it is typed in (external review 2026-09-30).
+    echo "poga install: installed — this shell's PATH does not include ~/.local/bin yet."
+    echo "poga install: to use \`poga\` in this shell, run:"
+    echo '    export PATH="$HOME/.local/bin:$PATH"'
+    echo "poga install: or open a new terminal."
+  elif [ "$changed" -eq 1 ]; then
+    echo "poga install: done — bare \`poga\` now works in this and future terminals."
+  else
+    echo "poga install: nothing to do — already installed."
+  fi
+}
+
+reserved() {
+  echo "poga $1: reserved verb — not built yet." >&2
+  echo "ADR-0061 D1 names \`run\` as a placeholder for a future non-session invocation;" >&2
+  echo "it is deliberately unspecified. \`session\`, \`lanes\`, \`bootstrap\` and \`restore\`" >&2
+  echo "are all live." >&2
+  exit 2
+}
+
+# The opening message a RESUMED lane starts on. Different from the fresh-lane prompt for
+# a reason: this session is walking into someone else's half-finished work, and the first
+# thing it must not do is assume the lane is its own clean slate.
+POGA_RESUME_PROMPT="you are resuming an existing lane that a previous session left open — run your startup, then report what work is already here, whether its journal was ever closed, and what it needs in order to land"
+
+cmd_resume() {
+  # WI-0122 / the walked-away case. Until this verb existed, a bare `poga` ALWAYS cut a
+  # fresh lane, so a lane you left — because you had to stop, or because the runtime
+  # dropped the session — could never be re-entered by anybody. Its work was reachable
+  # (the branch is right there) but unfinishable: nothing needing judgment inside that
+  # worktree, a rebase conflict most of all, had any resolution path that did not end at
+  # a human in a plain terminal. `recover-lanes` lands the lanes that merely need
+  # landing; this one is for every lane that needs a mind.
+  require_repo resume
+  parse_runtime_flag "$@"
+  set -- ${POGA_ARGS[@]+"${POGA_ARGS[@]}"}
+
+  local lane="${1:-}"
+  if [ -z "$lane" ] || [ "${lane#-}" != "$lane" ]; then
+    # Bare `poga resume` LISTS, exactly as bare `poga restore` does — and for the same
+    # reason: the useful question before a disaster is which lanes could be re-entered,
+    # not a refusal for omitting an argument you did not know the value of.
+    echo "poga resume — re-enter an existing lane (its work is on the branch already):" >&2
+    "${PY:-python3}" "$ROOT/session.py" lane-enterable || true
+    echo "" >&2
+    echo "  usage: poga resume <lane>      e.g. \`poga resume poga-4\` or \`poga resume 4\`" >&2
+    return 0
+  fi
+  shift
+  # `4` and `poga-4` both work. The lane's NAME is load-bearing everywhere else (the
+  # worktree dir, the branch, the allocator's free-slot check), so it is normalised here
+  # once rather than guessed at by each caller.
+  case "$lane" in
+    poga-*) ;;
+    [0-9]*) lane="poga-$lane" ;;
+  esac
+
+  # session.py owns "may a session enter this lane" — bash must not hold a second opinion
+  # about liveness (P16). Its refusal names the reason; pass it straight through.
+  local gate
+  if ! gate="$("${PY:-python3}" "$ROOT/session.py" lane-enterable "$lane" 2>&1)"; then
+    echo "poga: $gate" >&2
+    echo '      `poga resume` (bare) lists the lanes that can be entered.' >&2
+    exit 2
+  fi
+
+  resolve_runtime
+  export POGA_RUNTIME_ID="$POGA_RT_ID"
+  # ADR-0096. Resume creates no lane, so there is no litter argument here — but the three
+  # gate checks are about whether a RUNTIME can usefully start on this machine, and that
+  # is equally true entering an existing lane as making a new one. A dead backspace does
+  # not care which worktree you are in.
+  poga_preflight_gate
+  poga_board_ensure
+
+  # Drop the lane token itself, guarded: macOS ships bash 3.2, where `"${a[@]}"` on an
+  # empty array is an unbound-variable error under `set -u` — and `poga resume poga-4`
+  # with no further args is the overwhelmingly common call, which is exactly the case
+  # that empties it.
+  local -a args=()
+  if [ "${#POGA_ARGS[@]}" -gt 1 ]; then args=("${POGA_ARGS[@]:1}"); fi
+  POGA_PROMPT_IS_OURS=0
+  if ! has_operator_prompt ${args[@]+"${args[@]}"}; then
+    if [ "$POGA_RT_ARGV_SHAPE" != "positional" ] && [ -n "$POGA_RT_ARGV_SHAPE" ]; then
+      args+=("$POGA_RT_ARGV_SHAPE" "$POGA_RESUME_PROMPT")
+    else
+      args+=("$POGA_RESUME_PROMPT")
+    fi
+    POGA_PROMPT_IS_OURS=1
+  fi
+  if [ "$POGA_RT_GUARDS" != "native" ]; then
+    echo "poga: NOTE — runtime '$POGA_RT_ID' guards: $POGA_RT_GUARDS (not the native PreToolUse set)." >&2
+  fi
+
+  set_terminal_title "$(lane_label "$lane") ↩"
+  echo "poga: resuming $POGA_RT_ID in EXISTING lane '$lane' (worktree .claude/worktrees/$lane, branch worktree-$lane)" >&2
+  # Deliberately WITHOUT the runtime's own worktree flag: the worktree already exists, and
+  # asking the runtime to create it is how a resume turns into a fresh lane or an error.
+  # cd + exec is the same shape the non-native launch path already uses.
+  # WI-0399: a resumed lane closes itself too. Its predecessor's receipt named a pid
+  # that is long gone, and this overwrites it with the one about to be real.
+  poga_launch_record "$lane"
+  cd "$ROOT/.claude/worktrees/$lane"
+  exec "$POGA_RT_CMD" ${args[@]+"${args[@]}"}
+}
+
+# The verb list the unknown-verb refusal prints, DERIVED from main()'s dispatch table
+# rather than transcribed from it. The transcribed copy had gone stale in exactly the way a
+# copy does: it omitted resume, recover, promote, main-sync, main-restore, integrate and
+# deploy — SEVEN verbs poga has and its own error message denied having. That is the
+# WI-0158 defect turned inside out — not a printed command the reader cannot run, but a
+# runnable command the tool refuses to name — and a tool that misstates its own verb set
+# is the same failure one level up. Adding a branch to the case table is now the whole
+# edit; this message follows on its own.
+#
+# The regex is deliberately the same shape `tests/substrate_voice.py`'s `poga_verbs()`
+# uses — four spaces, a lowercase pattern, a close paren — so the lint and the tool read
+# one table the same way. BOUNDED TO main(): `cmd_work` and `cmd_ops` carry their own
+# subcommand case tables at the same indent, and an unbounded scan would offer
+# `board-check` and `chart` to a reader as poga verbs.
+#
+# WITHHELD by argument, not by omission: `run` is reserved (ADR-0061 D1) and answers with
+# its own message, and `promote` is withdrawn (ADR-0103), kept only as a route for stale
+# muscle memory and absent from `--help` for that reason. Both still WORK; neither is a
+# thing to offer someone who is already lost.
+# --- WI-0151: a recovery verb cannot be delivered by the thing it recovers -------------
+#
+# FOUND session ~161 on a genuinely stuck Runner. `poga integrate` exists to publish a
+# trunk whose push was rejected because origin moved on. It printed `integrate is not a
+# poga verb` — because `~/.local/bin/poga` symlinks into the MAIN checkout and that
+# checkout still held pre-fix code. The fix for the blockage was sitting at origin,
+# unreachable by exactly the blockage it fixes. The only route out was one a stuck
+# operator would have had to invent — merge origin into a LANE's branch and run that
+# lane's own copy of the harness — and it needs a live lane, which the machine that most
+# needs recovering is the least likely to have.
+#
+# THE ASYMMETRY THIS TURNS ON, and it is the whole reason a fix is possible at all: a
+# diverged checkout cannot PUSH and cannot FAST-FORWARD, but it can always FETCH, and it
+# can always write one blob out of a fetched tree. So "my substrate is behind origin" is
+# the one failure in this family that is recoverable from inside the stale substrate — no
+# second machine, no pre-existing lane, nothing the operator has to invent.
+#
+# WHAT RUNS, in order, and the order is the point: each step is cheaper and closer to
+# hand than the next, so the network is consulted only when nothing local can answer.
+#
+#   1. THE TREE UNDER YOUR FEET. A lane carries its own copy of this script while the one
+#      on PATH is the MAIN checkout's, so a lane can already hold the verb its own
+#      dispatcher denies. That is WI-0151's second half — same root — and it costs
+#      nothing to ask.
+#   2. ORIGIN. Fetch the trunk, lay its executable harness in a scratch directory, and ask
+#      THAT copy whether it has the verb — by running it, not by grepping it.
+#   3. REFRESH AND RETRY. If origin has it, write origin's harness over the checkout's and
+#      re-exec the command the operator actually typed.
+#
+# WHY IT REFRESHES RATHER THAN PRINTING THE COMMAND THAT WOULD. A recovery that ends in
+# "…and now type this" has moved the defect, not removed it: the operator is still the
+# transport, which is the original finding one level up. So the automatic path is the
+# DEFAULT and `POGA_NO_SELF_REFRESH=1` is the opt-out, never the reverse.
+#
+# WHAT IT WILL NOT DO. It refuses outright when any harness path in the target checkout is
+# locally MODIFIED — that is unlanded work, and a recovery path is not a reason to lose
+# it; it names those paths instead. It touches only the EXECUTABLE harness and never the
+# generated docs beside it, because no amount of content makes a verb dispatchable. It
+# anchors on the MAIN checkout, like every other verb whose subject is shared state, so
+# recovering from inside a lane does not write substrate onto that lane's branch. It
+# deletes nothing. And it runs at most once per process, so a verb origin does not have
+# either cannot loop.
+#
+# THE LOOP GUARD IS HANDED FORWARD, NOT EXPORTED, and the difference is the whole of
+# its correctness. `POGA_SUBSTRATE_REFRESHED` has to reach exactly one process — the
+# retry — and no further. Exported from here it would instead mark the launcher's whole
+# descendant tree: a retry that went on to spawn lanes would hand every one of them a
+# flag that silently DISABLES their own recovery, and a fixture running inside such a
+# lane would inherit it too (which is what `tests/test_dispatch_fixture_guard.py`'s
+# launcher-export check exists to catch, and did). So it is set on the exec with `env`,
+# and `main` CONSUMES it into a plain shell variable and unsets it on the first line —
+# after which nothing this process starts can see it at all.
+#
+# WHAT IT DOES NOT CLAIM TO FIX. This is forward-looking by construction: a machine stuck
+# TODAY with a copy of this script from before this change still has no route, because the
+# copy that would consult origin is the copy it does not have. Nothing written here can
+# change that. What changes is that the next stuck machine recovers itself, for any verb.
+
+# The executable half of the byte-identical substrate — the files that decide which verbs
+# EXIST. `sessionlib`'s module list is deliberately not written down here: it is read out
+# of the tree being installed FROM, so a module added or retired upstream needs no edit in
+# this file ([`derive-a-checks-subjects-from-the-authority`]). `CANON.md` / `STANDARD.md`
+# are the other half of that manifest and are deliberately absent — they are content, and
+# content cannot make a verb dispatchable.
+POGA_HARNESS_ROOTS="poga session.py interpreter.py standard_check.py sessionlib"
+
+substrate_trunk() {
+  # The same declared key `cmd_lanes` reads, with the same fleet default.
+  "${PY:-python3}" -c 'import json,sys; print(json.load(open(sys.argv[1])).get("trunk","main"))' \
+    "$1/session.config.json" 2>/dev/null || echo main
+}
+
+# The verb table of ANY copy of this script, one verb per line. Factored out of
+# `poga_verbs` so that the copy at origin — and the copy in the tree under your feet — are
+# interrogated by the SAME reader as the copy that is running. Two readers would be the
+# transcribed list `poga_verbs` already exists to delete.
+poga_verbs_in() {
+  [ -f "$1" ] || return 1
+  awk '
+    /^main\(\) \{/ { in_main = 1; next }
+    in_main && match($0, /^    [a-z][a-z0-9|-]*\)/) {
+      pat = substr($0, 5, RLENGTH - 5)
+      n = split(pat, alt, "|")
+      for (i = 1; i <= n; i++) print alt[i]
+    }
+  ' "$1"
+}
+
+# Does this harness know this verb? Asked by RUNNING it: `<verb> --help` is answered by
+# argparse from inside `parse_args`, before any command function or config check is
+# reached, so the probe is exact and side-effect-free. A grep for an `add_parser` call
+# would answer WRONG for every subcommand whose call wraps onto a second line, which is
+# most of them.
+#
+# Three answers, not two ([`declare-what-a-check-assumes`]): 0 it has the verb, 1 it does
+# not, 2 could not tell. A harness too old or too broken to answer has not said no, and
+# spending a fetch — or a refusal — on "could not tell" is the collapse that rule names.
+harness_has_verb() {
+  local py="$1" verb="$2" out rc=0
+  [ -f "$py" ] || return 2
+  out="$("${PY:-python3}" "$py" "$verb" --help 2>&1)" || rc=$?
+  [ "$rc" -eq 0 ] && return 0
+  case "$out" in
+    *"invalid choice"*) return 1 ;;
+  esac
+  return 2
+}
+
+# The READ half of the origin consult: fetch the trunk and lay its executable harness in a
+# scratch directory, whose path is printed on stdout. Nothing in the checkout is touched —
+# kept separate from the write so that a consult which finds nothing costs the operator no
+# state at all, only the fetch.
+origin_harness() {
+  local main="$1" trunk="$2" tmp p have=""
+  git -C "$main" remote get-url origin >/dev/null 2>&1 || return 1
+  # An EXPLICIT refspec, not a bare fetch of the remote: the remote-tracking ref we are
+  # about to read has to be the one this fetch just updated, and a checkout in trouble is
+  # exactly the checkout whose configured refspec nobody has verified.
+  git -C "$main" fetch --quiet origin "+refs/heads/$trunk:refs/remotes/origin/$trunk" \
+    >/dev/null 2>&1 || return 1
+  # Ask which of them origin actually HAS before archiving: a pathspec matching nothing is
+  # fatal to `git archive`, so naming a file a member was never sent would turn "one file
+  # is absent upstream" into "the whole consult failed".
+  for p in $POGA_HARNESS_ROOTS; do
+    if git -C "$main" cat-file -e "refs/remotes/origin/$trunk:$p" 2>/dev/null; then
+      have="$have $p"
+    fi
+  done
+  [ -n "$have" ] || return 1
+  tmp="$(mktemp -d "${TMPDIR:-/tmp}/poga-harness.XXXXXX")" || return 1
+  # `git archive | tar -x` rather than a checkout of those paths out of the tree: checkout
+  # STAGES what it writes, and a recovery that silently populates the index of a checkout
+  # already in trouble has added a second thing to undo. archive also carries the file
+  # modes, so the copy it lays down is executable without a chmod pass.
+  if ! git -C "$main" archive --format=tar "refs/remotes/origin/$trunk" -- $have 2>/dev/null \
+       | tar -x -C "$tmp" 2>/dev/null; then
+    rm -rf "$tmp"
+    return 1
+  fi
+  printf '%s\n' "$tmp"
+}
+
+# The WRITE half. Installs origin's harness over the main checkout's, one atomic rename per
+# file.
+#
+# RENAME, NOT TRUNCATE-AND-WRITE, and this is load-bearing rather than tidiness: bash reads
+# a script incrementally as it executes it, so overwriting the running copy in place
+# corrupts the very process doing the recovery — it resumes at a byte offset that now means
+# something else. A rename replaces the directory entry and leaves our open descriptor on
+# the old inode, so the shell that started this finishes it unchanged.
+#
+# NOTHING IS DELETED. A module this checkout carries that origin has retired is simply left
+# behind; `sessionlib/__init__.py` comes from origin too and names the parts it loads, so a
+# stale sibling is inert. Deleting would be the one irreversible act in a path whose whole
+# promise is that it is undoable.
+install_harness() {
+  local src="$1" main="$2" trunk="$3" rel dirty n=0
+  # Bytecode is not work (WI-0468). A Python that writes __pycache__ into the tree (any
+  # Linux python3, or Homebrew's on macOS; Apple's keeps it outside) would otherwise make
+  # every checkout that ever ran the harness look dirty here, and the refresh never runs.
+  dirty="$(git -C "$main" status --porcelain -- $POGA_HARNESS_ROOTS 2>/dev/null \
+           | grep -v -e '__pycache__/' -e '\.pyc$' || true)"
+  if [ -n "$dirty" ]; then
+    echo "poga: REFUSED to refresh the harness — $main has uncommitted changes to it:" >&2
+    printf '%s\n' "$dirty" | sed 's/^/        /' >&2
+    echo "      That is unlanded work, and a recovery path is not a reason to lose it." >&2
+    echo "      Land or set those aside, then ask again." >&2
+    return 1
+  fi
+  for rel in $(cd "$src" && find . -type f | sed 's|^\./||'); do
+    mkdir -p "$main/$(dirname "$rel")"
+    cp -p "$src/$rel" "$main/$rel.poga-refresh"
+    mv -f "$main/$rel.poga-refresh" "$main/$rel"
+    n=$((n + 1))
+  done
+  echo "poga: refreshed $n harness file(s) in $main from origin/$trunk." >&2
+  # No undo command is printed, and that is deliberate rather than an omission: the refusal
+  # above means every byte replaced here was COMMITTED content, so the checkout's own HEAD
+  # still holds what was there. Nothing unlanded can have been lost, and a command naming
+  # another tree is one a lane reader's own guard refuses anyway.
+  echo "      Every file replaced held committed content — nothing unlanded was touched." >&2
+  return 0
+}
+
+# The whole recovery. Either it EXECS the retry — and never returns — or it returns
+# non-zero having said on stderr what it looked at and what it found, so the caller's own
+# refusal still runs and the operator is never left with a silent nothing.
+#
+# `mode` is `verb` when this script's own table lacks the token, `harness` when the table
+# has it but the `session.py` behind it does not. They differ in exactly one step: only the
+# `verb` case can be answered by the tree under your feet, because in the `harness` case the
+# copy on PATH already agreed and the disagreement is one layer further down.
+recover_stale_verb() {
+  local mode="$1" verb="$2"; shift 2
+  local here main trunk tmp upstream=0
+  [ -n "$verb" ] || return 1
+  [ "${_POGA_REFRESHED:-}" = "1" ] && return 1
+  if [ "${POGA_NO_SELF_REFRESH:-}" = "1" ]; then
+    echo "poga: POGA_NO_SELF_REFRESH=1 — not consulting origin about '$verb'." >&2
+    return 1
+  fi
+  here="$(git rev-parse --show-toplevel 2>/dev/null)" || here=""
+  [ -n "$here" ] || return 1
+  main="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
+
+  # 1 — the tree under your feet. Free, offline, and the answer whenever a lane is newer
+  # than the main checkout its dispatcher lives in.
+  if [ "$mode" = "verb" ] && [ "$here" != "$SCRIPT_DIR" ] \
+     && poga_verbs_in "$here/poga" 2>/dev/null | grep -qxF -- "$verb"; then
+    echo "poga: '$verb' is not a verb of the copy on your PATH ($SCRIPT_DIR/poga), but the" >&2
+    echo "      checkout you are standing in has it. Using that copy." >&2
+    exec env POGA_SUBSTRATE_REFRESHED=1 bash "$here/poga" "$@"
+  fi
+
+  # 2 — origin.
+  trunk="$(substrate_trunk "$main")"
+  tmp="$(origin_harness "$main" "$trunk")" || tmp=""
+  if [ -z "$tmp" ]; then
+    echo "poga: could not read origin/$trunk (no remote, or the fetch failed), so this is" >&2
+    echo "      '$verb is not a verb HERE' — not '$verb is not a verb'. Nothing changed." >&2
+    return 1
+  fi
+  if poga_verbs_in "$tmp/poga" 2>/dev/null | grep -qxF -- "$verb"; then
+    upstream=1
+  elif harness_has_verb "$tmp/session.py" "$verb"; then
+    upstream=1
+  fi
+  if [ "$upstream" -ne 1 ]; then
+    rm -rf "$tmp"
+    echo "poga: consulted origin/$trunk — it does not carry '$verb' either." >&2
+    return 1
+  fi
+
+  # 3 — refresh and retry.
+  echo "poga: '$verb' exists at origin/$trunk and not in this checkout — the substrate here" >&2
+  echo "      is behind, which is the whole of the problem (WI-0151)." >&2
+  if ! install_harness "$tmp" "$main" "$trunk"; then
+    rm -rf "$tmp"
+    return 1
+  fi
+  rm -rf "$tmp"
+  echo "poga: retrying the command you typed." >&2
+  if [ -x "$main/poga" ]; then
+    exec env POGA_SUBSTRATE_REFRESHED=1 bash "$main/poga" "$@"
+  fi
+  exec env POGA_SUBSTRATE_REFRESHED=1 bash "$_SRC" "$@"
+}
+
+# Forward to a `session.py` subcommand, recovering if THIS checkout's harness is the reason
+# it could not run.
+#
+# EVERY forwarding site below goes through here rather than `exec`ing directly. What
+# WI-0151 records is a property of the SUBSTRATE, not of `integrate` — the verb it happened
+# to be found on — so teaching only that one site would leave every sibling answering the
+# old way, which is precisely the trap [`retire-the-class-not-the-instance`] names: fixing
+# the instance in hand removes the symptom that would have led you to the others.
+#
+# THE COST ON THE ORDINARY PATH IS ONE EXTRA PROCESS, NOT ONE EXTRA PYTHON START. We run
+# instead of exec, and only argparse's exit 2 buys the probe — so the 0.109 s per-verb
+# interpreter tax WI-0222 measured and refused is not reintroduced here by the back door.
+harness_exec() {
+  local py="$1"; shift
+  local verb="${1:-}" rc=0 known=0
+  if [ "${_POGA_REFRESHED:-}" = "1" ]; then
+    exec "${PY:-python3}" "$py" "$@"
+  fi
+  "${PY:-python3}" "$py" "$@" || rc=$?
+  [ "$rc" -eq 2 ] || exit "$rc"
+  # argparse answers 2 for a bad FLAG as well as for an unknown SUBCOMMAND. Ask which one
+  # this was before spending a fetch on it, and treat "could not tell" as neither.
+  harness_has_verb "$py" "$verb" || known=$?
+  [ "$known" -eq 1 ] || exit "$rc"
+  echo "poga: that refusal is this checkout's HARNESS, not your command — '$verb' is not a" >&2
+  echo "      subcommand of $py." >&2
+  # `|| true` because this runs under `set -e` and a recovery that found nothing returns
+  # non-zero BY DESIGN — without it the shell dies on the failure branch and the operator
+  # gets exit 1 where argparse's own 2 is the honest answer.
+  recover_stale_verb harness "$verb" ${_POGA_ARGV[@]+"${_POGA_ARGV[@]}"} || true
+  exit "$rc"
+}
+
+poga_verbs() {
+  local self
+  self="$("${PY:-python3}" -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$_SRC" 2>/dev/null)"
+  # The table is read by `poga_verbs_in` (WI-0151), which reads ANY copy of this script
+  # the same way — including origin's and a lane's. What stays here is only the framing:
+  # one comma-joined line, and the two verbs withheld by argument below.
+  poga_verbs_in "$self" | awk '
+    $0 != "run" && $0 != "promote" { out = out (out == "" ? "" : ", ") $0 }
+    END { if (out != "") print out }'
+}
+
+main() {
+  # WI-0151 — consume the loop guard and drop it from the environment in the same
+  # breath. It is an instruction to THIS process ("you are the retry; do not try to
+  # recover again"), and a flag that outlived that would turn off recovery for every
+  # process a retry goes on to start.
+  _POGA_REFRESHED="${POGA_SUBSTRATE_REFRESHED:-}"
+  unset POGA_SUBSTRATE_REFRESHED
+  local verb="${1:-session}"
+  case "$verb" in
+    session)               shift || true; cmd_session "$@" ;;
+    new)                   shift; cmd_intake "$@" ;;
+    lanes)                 shift; cmd_lanes "$@" ;;
+    resume)                shift; cmd_resume "$@" ;;
+    recover)
+      # The lane-landing half of recovery. Runs against the repo you are standing in and
+      # needs no lane of its own, so it forwards straight through like `main-sync`.
+      shift
+      harness_exec "$(git rev-parse --show-toplevel)/session.py" recover-lanes "$@" ;;
+    work)                  shift; cmd_work "$@" ;;
+    ops)                   shift; cmd_ops "$@" ;;
+    release)               shift; cmd_release "$@" ;;
+    authorize)             shift; cmd_authorize "$@" ;;
+    test)
+      # WI-0139. Runs against the tree you are STANDING IN — deliberately NOT the
+      # main-checkout anchor `work`/`ops` use: the whole point is to test the code
+      # this lane just edited, and main's copy is not it.
+      shift
+      harness_exec "$(git rev-parse --show-toplevel)/session.py" test "$@" ;;
+    preflight)
+      # WI-0149. Runs against THIS MACHINE and the tree you are STANDING IN. Not
+      # require_repo (which anchors on main) for the same reason `test` is not: the
+      # question is whether THIS checkout can be worked and landed in, and main's copy
+      # is a different answer. Forwards straight through — it needs no lane of its own,
+      # and a verb whose job is to say why a lane cannot be created must not need one.
+      shift
+      harness_exec "$(git rev-parse --show-toplevel)/session.py" preflight "$@" ;;
+    promote)
+      # WITHDRAWN (ADR-0103 supersedes ADR-0106 D3/D4). Kept as a route, NOT as a
+      # capability: session.py refuses and names `poga deploy` as the replacement, which
+      # is a better answer than "unknown verb" for anyone whose muscle memory or whose
+      # stale copy of a doc still says `promote`. Deliberately absent from --help.
+      shift
+      harness_exec "$(git rev-parse --show-toplevel)/session.py" promote "$@" ;;
+    main-sync)
+      # Runs against the tree you are STANDING IN — deliberately NOT require_repo,
+      # which anchors on main: the verb's whole point is a LANE acting on main under
+      # the ADR-0091 D3 contract, and session.py itself no-ops off a lane.
+      shift
+      harness_exec "$(git rev-parse --show-toplevel)/session.py" main-sync "$@" ;;
+    main-restore)
+      # WI-0097. Same anchoring argument as `main-sync`: a LANE acting on main under a
+      # defined contract, so it runs against the tree you are standing in. From main itself
+      # it repairs main (WI-0461); elsewhere it no-ops. The verb the `main:` banner names, instead of telling
+      # the reader to open a session in a checkout he never runs in.
+      shift
+      harness_exec "$(git rev-parse --show-toplevel)/session.py" main-restore "$@" ;;
+    integrate)
+      # WI-0143. Runs against the tree you are STANDING IN, like `main-sync` and for the
+      # same reason: the verb's whole point is a LANE reconciling the trunk it just
+      # CAS-advanced with origin, which it cannot do by checking the trunk out. Needs no
+      # lane of its own — a verb that exists because a land could not publish must not
+      # require another land to run.
+      shift
+      harness_exec "$(git rev-parse --show-toplevel)/session.py" integrate "$@" ;;
+    deploy)
+      # ADR-0103. Promotion: put a TAGGED release of a registered system onto THIS
+      # machine. Deliberately anchored on the FEDERATION checkout rather than the tree
+      # you are standing in — unlike every verb above it, this one does not act on the
+      # repo under your feet, it acts on ~/deploy/<system> using the federation's
+      # registry. Standing in a member checkout to deploy a different member must not
+      # change what happens.
+      #
+      # The runner is resolved from THIS SCRIPT'S OWN location, not from the cwd. poga
+      # is installed as a symlink into the federation checkout, so its real path is the
+      # federation, wherever you happen to be standing — including inside a member's repo,
+      # where `require_repo` would have anchored ROOT on that member and looked for a
+      # runner that is not there. A verb whose whole job is to act on a system OTHER
+      # than the one under your feet must not take its bearings from your feet.
+      shift
+      _fed="$("${PY:-python3}" -c 'import os,sys; print(os.path.dirname(os.path.realpath(sys.argv[1])))' "$0")"
+      [ -f "$_fed/deploy/runner.py" ] || {
+        echo "poga deploy: no deploy runner at $_fed/deploy/runner.py — this poga is not" >&2
+        echo "installed from a federation checkout (ADR-0103)." >&2
+        exit 2
+      }
+      exec "${PY:-python3}" "$_fed/deploy/runner.py" "$@" ;;
+    diagnose)
+      # WI-0229, Exit C of the 2026-09-03 brief. Ask a DEPLOYED system what state it is
+      # in — ledger, unit liveness, exit codes, log tails, the contract's own verify —
+      # and get an answer without a person opening a session on the machine it runs on.
+      #
+      # Anchored exactly like `deploy` above and for the same reason: it acts on
+      # ~/deploy/<system> using the federation's registry, not on the repo under your
+      # feet, so standing in a member checkout must not change what it reports. It
+      # resolves the federation from THIS SCRIPT'S real path, because `poga` is installed
+      # as a symlink into the federation checkout.
+      #
+      # Read-only, always. It is a separate program from the runner rather than a flag on
+      # it precisely so that stays true (ADR-0103 D4).
+      shift
+      _fed="$("${PY:-python3}" -c 'import os,sys; print(os.path.dirname(os.path.realpath(sys.argv[1])))' "$0")"
+      [ -f "$_fed/deploy/diagnose.py" ] || {
+        echo "poga diagnose: no diagnose collector at $_fed/deploy/diagnose.py — this" >&2
+        echo "poga is not installed from a federation checkout (ADR-0103). The deploy" >&2
+        echo "registry and the contracts it reads live there; \`session\` and \`lanes\`" >&2
+        echo "work everywhere." >&2
+        exit 2
+      }
+      exec "${PY:-python3}" "$_fed/deploy/diagnose.py" "$@" ;;
+    dispatch)              shift; cmd_dispatch "$@" ;;
+    dispatched)            shift; cmd_dispatch_status "$@" ;;
+    decisions)             shift; cmd_decisions "$@" ;;
+    show)                  shift; cmd_show "$@" ;;
+    attach)                shift; cmd_attach "$@" ;;
+    drill)                 shift; cmd_drill "$@" ;;
+    install)               shift; cmd_install "$@" ;;
+    bootstrap|restore|init|share) cmd_lifecycle "$@" ;;
+    run)                   reserved "$verb" ;;
+    -h|--help|help)
+      echo "poga operates on the repo you are STANDING IN — cd to a member checkout first."
+      echo
+      echo "usage: poga [session] [claude-args...]      # default: launch in a fresh lane"
+      echo "                                            # in a folder with NO repo, this is"
+      echo "                                            # the new-system intake instead"
+      echo "       poga new [-r <runtime>]              # stand up a new system HERE. With no fleet"
+      echo "                                            # federation this is \`poga init\`; with one"
+      echo "                                            # (or -r / --agent-intake) an agent interviews"
+      echo "                                            # you, writes bootstrap-spec.json, installs."
+      echo "                                            # Asks before creating any remote (federation-only)"
+      echo "       poga lanes [--clean]                 # list lanes; --clean deletes merged ones
+       poga resume [<lane>]                 # re-enter a lane a previous session left
+                                            # open — bare, lists which lanes can be
+                                            # entered. For work that needs a mind.
+       poga recover [--dry-run] [--lane N]  # land the work stranded in lanes whose
+                                            # session is provably over. For work that
+                                            # only needs landing."
+      echo "       poga work [list|show|new|edit|move|check|…]  # the work-item store (poga work --help)"
+      echo "       poga ops  [new|ran|status|show|…]     # operational obligations — the things"
+      echo "                                            # that get RUN (poga ops --help)"
+      echo "       poga release [list|candidates|declare|cut]  # the project version — harvest a"
+      echo "                                            # release, tag it, push it. Anchors on"
+      echo "                                            # the main checkout from any lane"
+      echo "                                            # (poga release --help)"
+      echo "       poga authorize [grant|list|revoke|check]   # ADR-0112: mint a grant a lane"
+      echo "                                            # can cite instead of quoting a peer"
+      echo "       poga test [-p PAT] [-v]              # run the suite and print a verdict that"
+      echo "                                            # can say DID NOT REPORT — never a green"
+      echo "                                            # read off a pipe's exit code"
+      echo "       poga preflight [--quick] [--json]    # check every precondition a fresh machine"
+      echo "                                            # fails — terminfo, workspace trust,"
+      echo "                                            # onboarding, live auth, data root,"
+      echo "                                            # residency, stray auth flows, memory"
+      echo "                                            # pressure, the gate."
+      echo "                                            # Says CANNOT TELL rather than folding"
+      echo "                                            # one into a pass."
+      echo "                                            # --quick skips the gate (the slow one)"
+      echo "                                            # REPAIRS what it can by default and"
+      echo "                                            # says what it could not; --no-repair"
+      echo "                                            # only reports (ADR-0109)"
+      echo "       poga dispatch <range> [--go]         # fan items out to peer lanes;"
+      echo "                                            # plans by default, --go spawns."
+      echo "                                            # --cap N (concurrent, default 5)"
+      echo "                                            # --run X|all (budget, default one wave)"
+      echo "                                            # --subagent WI-…,WI-… (keep here)"
+      echo "       poga dispatched [-v]                 # open dispatches and their queues"
+      echo "       poga decisions [--since D]           # every decision a lane RECORDED"
+      echo "                                            # instead of asking, newest first,"
+      echo "                                            # as one batch to review. Defaults"
+      echo "                                            # to since the last OPS-0007 run."
+      echo "                                            # --json for the same rows in full"
+      echo "       poga show <file> [--section H]       # read a LARGE file without a"
+      echo "                                            # whole-file read: --sections lists"
+      echo "                                            # the headings with byte ranges,"
+      echo "                                            # --section H prints one (closing at"
+      echo "                                            # the next same-or-shallower heading),"
+      echo "                                            # --bytes A-B prints a range. Every"
+      echo "                                            # answer ends in a receipt saying"
+      echo "                                            # where it stopped and where to"
+      echo "                                            # continue, so chunks never overlap."
+      echo "                                            # Reads the tree you are IN"
+      echo "       poga drill [--lanes N] [--clean]     # rehearse dispatch->attach with FAKE"
+      echo "                                            # lanes: no work item, no journal, no"
+      echo "                                            # session number, no branch. --clean"
+      echo "                                            # leaves nothing behind"
+      echo "       poga attach [D-id …] [--host H]      # RUN THIS WHERE YOU SIT: open one"
+      echo "                                            # window per dispatched lane and keep"
+      echo "                                            # opening them as later waves spawn."
+      echo "                                            # Omit the id and the work machine is"
+      echo "                                            # asked what it is running — EVERY live"
+      echo "                                            # dispatch is attached, watched together."
+      echo "                                            # --dry-run prints the window commands"
+      echo "                                            # and opens none"
+      echo "       poga deploy <system> [--version v…]  # ADR-0103: put a TAGGED release of a"
+      echo "                                            # registered system onto THIS machine —"
+      echo "                                            # fetch, read that tag's contract, seed"
+      echo "                                            # state, check out, sync, SMOKE, restart,"
+      echo "                                            # verify, record. Untagged is refused."
+      echo "                                            # --rollback returns to the ledger's"
+      echo "                                            # previous version; --canary <tag> tries a"
+      echo "                                            # tag in a SEPARATE tree and runs its smoke"
+      echo "                                            # there, restarting nothing (the only way to"
+      echo "                                            # run a vX.Y.Z-rc.N candidate); --status says"
+      echo "                                            # what is"
+      echo "                                            # running where; --sweep reconciles every"
+      echo "                                            # registered system; --dry-run touches"
+      echo "                                            # nothing. Acts on ~/deploy/<system>, NOT"
+      echo "                                            # on the repo you are standing in."
+      echo "                                            # --drill [<system>] proves the ROLLBACK"
+      echo "                                            # for real: redeploys the tag a system is"
+      echo "                                            # already running, forces its verify gate"
+      echo "                                            # to fail, and lets the rollback path run."
+      echo "                                            # Same tag in, same tag out. --unattended"
+      echo "                                            # is what the mail poller calls: drill if"
+      echo "                                            # never drilled, then sweep — and only on"
+      echo "                                            # the machine the channel declares"
+      echo "                                            # resident."
+      echo "       poga diagnose <system> [--json]      # WI-0229: read-only evidence about a"
+      echo "                                            # DEPLOYED system — ledger, unit liveness"
+      echo "                                            # and exit codes, log tails, and the"
+      echo "                                            # contract's own verify. Changes nothing."
+      echo "                                            # --all does every registered system;"
+      echo "                                            # --no-verify skips the one probe that"
+      echo "                                            # executes rather than observes; --post"
+      echo "                                            # mails the bundle home if the state"
+      echo "                                            # changed (what the sweep does). Reads"
+      echo "                                            # ~/deploy/<system>, NOT the repo you"
+      echo "                                            # are standing in."
+      echo "       poga main-sync [--dry-run]           # from a lane: commit main's harness-"
+      echo "                                            # written records (never authored files)"
+      echo "       poga main-restore [--dry-run]        # from a lane: repair main's working tree —"
+      echo "                                            # restore what the trunk has provably"
+      echo "                                            # superseded, name the rest. --show prints"
+      echo "                                            # what the rest hold, so the call is made"
+      echo "                                            # here and not in a session in main"
+      echo "       poga integrate [--dry-run]           # from a lane: reconcile the trunk with"
+      echo "                                            # origin when a land could not push —"
+      echo "                                            # replay onto origin, re-gate, CAS, push."
+      echo "                                            # Refuses on conflict; never forces."
+      echo "       poga install                         # one-time per-machine: symlink into ~/.local/bin"
+      echo
+      echo "  federation-only (need poga_cli.py; run from the federation checkout):"
+      echo "       poga init [PATH] [--yes] [--name N] [--purpose P] [--create-remote]"
+      echo "                                                # make a local-only POGA project and"
+      echo "                                                # join the local federation on this"
+      echo "                                                # machine (~/.config/poga/federation)"
+      echo "       poga share                              # send each project's shareable lessons"
+      echo "                                                # to the other local projects' inboxes"
+      echo "       poga bootstrap --spec <spec> [--plan]   # stand up a new Architect (local only"
+      echo "                                                # unless --create-remote)"
+      echo "       poga bootstrap --spec <spec> --adopt <path> [--create-remote] [--plan]"
+      echo "                                                # adopt-in-place (ADR-0067): install"
+      echo "                                                # substrate into an existing project"
+      echo "       poga bootstrap --adopt                  # adopt the CURRENT directory;"
+      echo "                                                # --spec defaults to bootstrap-spec.json"
+      echo "                                                # found inside it"
+      echo "       poga restore                            # list what CAN be restored"
+      echo "       poga restore <system> --into <dir>      # rebuild ONE system from backup"
+      echo "                    [--plan] [--scenario machine-loss|site-loss]"
+      echo "       poga run                             # reserved (ADR-0061 D1)"
+      echo
+      echo "bootstrap and restore share one pipeline (ADR-0061): restore = bootstrap +"
+      echo "hydrate. restore never reports plain success — it exits 3 with the credentials"
+      echo "checklist when secrets are owed to a human."
+      ;;
+    *)
+      # Unknown FIRST TOKEN. The fallthrough to `session` is deliberate and must stay:
+      # `poga --model x` and `poga 'fix the thing'` both have to work. But it also
+      # swallowed MISTYPED VERBS whole — `poga release list` launched a lane with
+      # "release list" as its prompt, no error, and left a phantom lane behind for the
+      # board to flag (WI-0112, session ~134; `release-list` is a `session.py`
+      # subcommand, not a `poga` verb).
+      #
+      # The rule is deterministic, not a guess about intent ([P15]): a first argument
+      # that contains NO WHITESPACE and does not begin with `-` is verb-shaped, and a
+      # verb-shaped token that is not a verb is a mistake. A real prompt has spaces; a
+      # flag has a dash; a genuinely one-word prompt still works via `poga session <word>`,
+      # which the refusal names. Failing loudly costs a retype — failing silently costs a
+      # lane, a phantom journal, and a red board nobody connects back to the typo.
+      case "$verb" in
+        -*|*[[:space:]]*) cmd_session "$@" ;;
+        *)
+          # WI-0151 — ASK BEFORE REFUSING. A verb-shaped token this script does not know
+          # is not the same thing as a verb that does not exist: this copy may simply be
+          # behind the one that has it. `recover_stale_verb` execs the retry when it finds
+          # the verb and returns here when it does not, having said on stderr what it
+          # consulted — so the refusal below still runs, now as a SEARCHED negative rather
+          # than an unexamined one ([`declare-what-a-check-assumes`]).
+          recover_stale_verb verb "$verb" "$@" || true
+          echo "poga: '$verb' is not a poga verb." >&2
+          local _verbs
+          _verbs="$(poga_verbs || true)"
+          if [ -n "$_verbs" ]; then
+            printf '%s\n' "$_verbs" | fold -s -w 62 \
+              | sed -e '1s/^/  verbs: /' -e '2,$s/^/         /' -e 's/[[:space:]]*$//' >&2
+            echo "         (\`poga --help\` describes them)" >&2
+          else
+            # Say we could not read the table rather than printing a list nobody derived:
+            # a hand-kept fallback here would be the stale copy this function exists to
+            # delete, restored under a nicer name.
+            echo "  (could not read this script's own verb table — see \`poga --help\`)" >&2
+          fi
+          echo "  If you meant a session.py subcommand, run \`python3 session.py $verb\`." >&2
+          echo "  If you meant it as the session prompt, run \`poga session $verb\`." >&2
+          exit 2
+          ;;
+      esac
+      ;;
+  esac
+}
+
+# The argv the operator actually typed, captured before `main` shifts any of it. WI-0151's
+# retry re-execs exactly this, rather than a reconstruction assembled from whatever a
+# forwarding site happened to still be holding.
+_POGA_ARGV=("$@")
+
+main "$@"

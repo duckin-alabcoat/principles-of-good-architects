@@ -1,0 +1,54 @@
+#!/bin/sh
+# pre-push — federation binding guard (ADR-0041 C3 operational-guards, git-boundary).
+#
+# Agent-agnostic: a git hook fires on ANY agent's `git push`, whatever runtime
+# built the repo (Gemini/Antigravity, Claude Code, a human). That is why the
+# federation can ENFORCE the destructive-git guard on a non-Claude system that has
+# no PreToolUse interception (ADR-0041 §4: enforce where the runtime allows).
+#
+# It blocks the destructive pushes: remote branch DELETION and NON-FAST-FORWARD
+# (force-push / history rewrite). git cannot pass `--force` to a hook, but a
+# rewrite shows structurally as the remote sha not being an ancestor of the local
+# sha — which this detects. A deliberate override is `git push --no-verify`, so
+# the guard makes destruction a conscious act (confirm-destructive-ops / P9),
+# not a silent one.
+#
+# stdin lines from git:  <local ref> <local sha> <remote ref> <remote sha>
+
+z40=0000000000000000000000000000000000000000
+status=0
+
+# S2 (2026-07-14-federation-metrics): append one structured line per firing to the
+# gitignored guard-firing log, so a git-boundary block is minable like the check-bash
+# denials. Best-effort — a telemetry failure must never change the guard's exit status.
+log_firing() {
+    top=$(git rev-parse --show-toplevel 2>/dev/null) || return 0
+    dir="$top/.session-state"
+    mkdir -p "$dir" 2>/dev/null || return 0
+    ts=$(date +%Y-%m-%dT%H:%M:%S%z 2>/dev/null)
+    printf '{"ts":"%s","guard":"pre-push","op":"%s","repo":"%s"}\n' \
+        "$ts" "$1" "$(basename "$top")" >> "$dir/guard-firings.jsonl" 2>/dev/null || true
+}
+
+while read local_ref local_sha remote_ref remote_sha; do
+    # Deleting a remote branch by push (local side is all-zeros).
+    if [ "$local_sha" = "$z40" ]; then
+        echo "pre-push BLOCKED: refusing to delete remote ref $remote_ref (destructive)." >&2
+        echo "  If truly intended: git push --no-verify" >&2
+        log_firing "delete $remote_ref"
+        status=1
+        continue
+    fi
+    # Brand-new branch with no remote counterpart is always safe.
+    [ "$remote_sha" = "$z40" ] && continue
+    # Non-fast-forward: remote sha is NOT reachable from the local sha => the push
+    # would overwrite history that is already on the remote.
+    if ! git merge-base --is-ancestor "$remote_sha" "$local_sha" 2>/dev/null; then
+        echo "pre-push BLOCKED: non-fast-forward (force / history rewrite) to $remote_ref." >&2
+        echo "  This would overwrite shared history. If truly intended: git push --no-verify" >&2
+        log_firing "non-fast-forward $remote_ref"
+        status=1
+    fi
+done
+
+exit $status

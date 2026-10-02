@@ -1,0 +1,42 @@
+# poga.local — machine-local wrapper hooks (gitignored; copy and edit).
+#
+# Sourced by `poga_board_ensure` at every lane launch, before the exec (WI-0028 /
+# consultant B8). Repo paths and ports are machine data (P3),
+# which is why this file is not tracked and this example carries a placeholder path.
+#
+# ── WHERE TO PUT IT (WI-0154) ────────────────────────────────────────────────────
+#
+#   ~/.config/poga/poga.local     the MACHINE-level file — PREFER THIS
+#   <repo>/poga.local             a per-member override, read second and wins
+#
+# Which board runs on a box, on which port, from which checkout, is a fact about the
+# MACHINE, not about any one member. Read out of `<repo>/poga.local` alone it needed a
+# hand-maintained copy in every checkout on the box — many of them on a busy
+# machine — which is the duplicate shape `single-source-and-deliver` forbids. It is
+# also why the file existed in NONE of them: nobody writes one config that many times, so
+# `poga_board_ensure` was a silent no-op on the machine where every lane runs, and the
+# board stayed up only because a human had started it by hand.
+#
+# Both files are sourced when both exist, machine-first: a member that genuinely needs
+# its own board keeps the override it always had. An inherited `POGA_BOARD_CMD` in the
+# environment loses to either file — a declared file is a decision, an inherited
+# variable is an accident.
+#
+# ── POGA_BOARD_CMD ───────────────────────────────────────────────────────────────
+#
+# The command that ensures the machine's board is running. Launched backgrounded, silenced,
+# and never fatal: the board is an observer and must not be able to block or slow a
+# lane. The board's own `--ensure` is idempotent (a matching incumbent is fronted
+# silently; a mismatched one is refused toward `--restart`).
+#
+# On the machine that hosts the board — normally the work machine, where the lanes run:
+#
+#   export POGA_BOARD_CMD='cd /path/to/board && /usr/bin/python3 <board-program> --ensure <the board's own flags>'
+#
+# SPELL THE INTERPRETER OUT rather than leaving `python3` to PATH, and give the SAME
+# flags the running board uses: `--ensure` compares its resolved repo set against the
+# incumbent's, so a shorter command here is a refusal at every lane launch, and a
+# different interpreter is the split-brain `--ensure` exists to prevent.
+#
+# On a machine that should NOT start a board (e.g. one that only reads another
+# machine's board): leave POGA_BOARD_CMD unset — the hook is a no-op.

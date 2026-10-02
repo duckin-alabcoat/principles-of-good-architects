@@ -1,0 +1,85 @@
+# Data — never committed. See ADR-0007.
+# Inputs (mirrored copies of other systems' files) and producer observations
+# are data. The distilled registries (principles/, habits/) are SYSTEM and
+# tracked in git per ADR-0018 — adopted canon is part of the system, not data.
+
+# NO trailing slash on these five. A trailing slash matches DIRECTORIES ONLY, and in a
+# poga lane these paths are SYMLINKS to the main checkout's copies (session 90) — which
+# git sees as symlinks, not directories, so `users/` let `users` through as untracked and
+# the machine-specific link would have been committed. Without the slash the pattern
+# matches the directory and the symlink alike.
+inputs
+users
+architect-learnings.md
+retrofit-reports
+proposed-edits
+
+# Python bytecode — build artifacts from running the harness/tests, never committed.
+__pycache__/
+*.pyc
+
+# OS / editor cruft
+.DS_Store
+*.swp
+*.swo
+*~
+
+# Local-only working files
+*.local.md
+scratch/
+snapshots/
+
+# Machine-local reconcile search roots (P3 — machine-specific paths stay out of
+# git). reconcile-roots.example is tracked as the template; the .local copy is not.
+# See curate/reconcile.py --status.
+reconcile-roots.local
+
+# Machine-local system-id -> repo-path locator map (P3). repo-paths.example is
+# tracked as the template; the .local copy is not. See curate/reconcile.py.
+repo-paths.local
+
+# Machine-local poga wrapper hooks (WI-0028 — the board ensure
+# command carries a machine-specific path and port, P3). poga.local.example is
+# tracked as the template; the .local copy is not. Sourced by poga_board_ensure.
+poga.local
+
+# Curate-pass generated review files — ephemeral staging output. The gather
+# script (curate/gather.py) and its cursor (curate/seen.json) are system and
+# tracked; the REVIEW-*.md files it generates are throwaway. See ADR-0019.
+curate-runs/
+
+# Metrics evidence appendix (ADR-0048) — a reproducible, on-demand mined snapshot
+# (curate/metrics.py --evidence). Regenerated for the case study when needed; not a
+# source of truth, so it is not tracked (avoids churn on every regen). The generator
+# and fleet-cadence.json ARE system and tracked; this rendered output is a build
+# artifact. The guard-firing log it reads lives under .session-state/ (below).
+EVIDENCE.md
+
+# Claude Code: machine-local settings overrides + transient agent worktrees.
+# Project settings (.claude/settings.json) are system and committed; the
+# files below are user-machine-specific or transient and must not be.
+.claude/settings.local.json
+.claude/worktrees/
+
+# Session liveness sidecar (ADR-0036) — ephemeral, machine-local, all-derivable
+# heartbeat/ended markers keyed by session_id. Evidence for orphan triage only;
+# never authoritative (the tracked start stamp is). Must not be committed.
+.session-state/
+
+# Concrete rendered adoption-runner LaunchAgent (ADR-0050): the installer fills the
+# tracked deploy/*.template with this machine's absolute paths (P3) and installs to
+# ~/Library/LaunchAgents. A stray filled plist under deploy/ must never be committed.
+deploy/*.plist
+
+# Machine-local deploy seed sources (P3 / ADR-0103 — where a first deploy copies a
+# system's gitignored state from on THIS machine). seed-paths.local.example.json is
+# tracked as the template; the .local copy is not. Read by deploy/runner.py.
+deploy/seed-paths.local.json
+
+# Machine-local deploy ledger lives OUTSIDE the repo entirely
+# (~/.local/state/poga/deploy) — nothing to ignore here, noted so the next reader
+# does not go looking for it in-tree.
+
+# PUBLIC CUT: these hold what the cut publishes (the sample, the blank
+# profile), so the internal data rules above are lifted for them.
+!users

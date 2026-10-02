@@ -1,0 +1,7 @@
+# FICTIONAL EXAMPLE — ~/.config/poga/poga.local on `devhost`.
+#
+# Sourced at every lane launch. This host runs the status board, so it names the command
+# that makes sure the board is up. The board is a separate program; it does not ship with
+# POGA. On `laptop` and `runner` this file is absent, so the hook does nothing there.
+
+export POGA_BOARD_CMD='cd /Users/alex/Projects/status-board && /usr/bin/python3 board.py --ensure --port 8765'

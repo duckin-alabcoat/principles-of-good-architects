@@ -1,0 +1,30 @@
+{
+  "_comment": [
+    "TEMPLATE for deploy/seed-paths.local.json — copy it, fill in this machine's paths,",
+    "and leave the copy out of git (.gitignore already covers it).",
+    "",
+    "WHAT THIS IS FOR. A system's first deploy into ~/deploy/<system> starts with an empty",
+    "tree for anything gitignored: accumulated watcher state, caches, local data. This file",
+    "says where, ON THIS MACHINE, a first deploy may COPY that state from — normally the",
+    "developer clone the system used to run out of. The copy happens once; every later",
+    "deploy and every rollback leaves the state alone, because a tag checkout does not touch",
+    "ignored files.",
+    "",
+    "WHY IT IS NOT IN THE CONTRACT. The system's deploy/deploy.json is tracked in the",
+    "system's own repo and has to be true on every machine that ever deploys it. An",
+    "absolute path to one person's home directory is not that. Putting it there — or in the",
+    "federation's tracked registry.json — would be a per-machine fact stored at one shared",
+    "path, which is WI-0132's defect. So the contract names the path INSIDE the tree, and",
+    "this file names where it comes from OUTSIDE it.",
+    "",
+    "Keys under a system are the contract's `state[].path` values, verbatim. A path with no",
+    "entry here is not an error: the runner says so and leaves the system to create its own.",
+    "The runner NEVER moves and NEVER overwrites — the source keeps its copy as a fallback."
+  ],
+  "systems": {
+    "example-system": {
+      "example_state.json": "/Users/you/Projects/Example/example_state.json",
+      "cache/": "/Users/you/Projects/Example/cache/"
+    }
+  }
+}
