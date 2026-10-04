@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  FICTIONAL EXAMPLE. The nightly adoption job, as installed on `runner`.
+
+  A LaunchAgent in ~/Library/LaunchAgents, because it starts the agent runtime headless,
+  and the runtime reaches its login only from alex's logged-in session.
+
+  Rendered from deploy/com.federation.adopt-runner.plist.template by
+  deploy/install-adopt-runner.sh on the host itself.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>org.example.poga.adopt-runner</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/python3</string>
+        <string>/Users/alex/Projects/poga/curate/adopt-runner.py</string>
+        <string>--claude-bin</string>
+        <string>/Users/alex/.local/bin/claude</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/alex/Projects/poga</string>
+
+    <!-- 03:15 local time (Europe/Lisbon on this host). -->
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key><integer>3</integer>
+        <key>Minute</key><integer>15</integer>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/alex/Projects/poga/.session-state/adopt-runner.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/alex/Projects/poga/.session-state/adopt-runner.err.log</string>
+</dict>
+</plist>

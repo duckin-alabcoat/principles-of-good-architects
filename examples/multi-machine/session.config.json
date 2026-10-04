@@ -1,0 +1,19 @@
+{
+  "//": "FICTIONAL EXAMPLE. The settings in one project's session.config.json that change in a multi-machine installation. Only these keys are shown; a real file has more.",
+  "timezone": "Europe/Lisbon",
+  "//machine_map": "Each host's name, as the machine reports it, maps to the short label that session stamps and receipts use.",
+  "machine_map": {
+    "laptop": "Laptop",
+    "devhost": "DevHost",
+    "runner": "Runner"
+  },
+  "//residency": "`process` names the host that runs this project's production process. `data` is null: this project keeps no production data.",
+  "residency": {
+    "process": "Runner",
+    "data": null
+  },
+  "//interaction": "The picker ban is on by default. This installation keeps it on. Set pickers to \"allow\" to turn it off.",
+  "interaction": {
+    "pickers": "deny"
+  }
+}

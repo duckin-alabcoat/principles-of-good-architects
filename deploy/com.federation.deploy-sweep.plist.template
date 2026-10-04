@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Federation deploy sweep (ADR-0103 D8) — Runner LaunchAgent, polling every 600s.
+
+  poga-host: Runner
+
+  This is a TEMPLATE. `deploy/install-deploy-sweep.sh` fills the __PLACEHOLDER__ tokens
+  from the local machine and installs the concrete plist to ~/Library/LaunchAgents (never
+  committed — it carries machine-specific absolute paths, P3).
+
+  WHAT IT DOES. Compares every system in deploy/registry.json against its newest semver
+  tag on origin and deploys anything newer, through exactly the same code path as
+  `poga deploy <system>`. A version landed and tagged is running by the next sweep,
+  with the operator reading only the outcome.
+
+  WHY IT IS A LaunchAGENT AND NOT A DAEMON, for a different reason than the adopt-runner.
+  The adopt-runner needs the Aqua session for the login keychain. This one does not touch
+  `claude` at all (ADR-0103 D4 — the runner is plain code), so it has no keychain
+  dependency and would work headless. It is an Agent because the SERVICES IT RESTARTS are
+  LaunchAgents in the user's GUI domain: `launchctl kickstart gui/<uid>/<label>` has to be
+  issued from a context that can reach that domain.
+
+  SUPERSEDED by the mail-poller trigger (WI-0316, ADR-0103 amendment 2026-09-13):
+  `curate/mail-poller.py` calls the runner's `unattended` verb on its own schedule, so
+  this unit is no longer how the sweep runs. Kept rather than deleted because deleting a
+  template does not retire a job already bootstrapped on a machine. (The verb is spelled
+  here without its leading dashes on purpose: this is an XML comment, and a double hyphen
+  inside one makes the whole plist unparseable. The suite caught exactly that.)
+
+  DO NOT INSTALL THIS UNTIL the on-demand verb has deployed successfully twice and a
+  rollback has been drilled (ADR-0103 D9). An unattended deployer whose failure path has
+  never run is a deployer nobody should trust — the whole point of the smoke gate and the
+  rollback is that they work, and "it has never been tested" is not evidence of that.
+
+  Fails safe by construction: a smoke failure restarts nothing, a verify failure rolls
+  back and re-verifies the old version, and either way it authors a comms/ blocked note.
+  A sweep with nothing newer to deploy is a no-op that writes only a checked_at stamp.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.federation.deploy-sweep</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>__PYTHON__</string>
+        <string>__FED_ROOT__/deploy/runner.py</string>
+        <string>--sweep</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>__FED_ROOT__</string>
+
+    <!-- launchd hands jobs a minimal PATH. git, uv and flox all live outside it, and a
+         deploy that cannot find its dependency tool fails as a shell error rather than a
+         named refusal — the WI-0187 lesson, paid for twice in one session.
+
+         THE LIST BELOW IS NOT THE WHOLE PATH, and must not be read as it.
+         `render_unit_plist` PREPENDS the rendering machine's `~/.local/bin` when it fills
+         the tokens above. A member's contract may resolve its apply verb on PATH by
+         design (ADR-0103 D8 shape 2) and that is where the operator installs those verbs:
+         a real member's apply verb was there once, this unit could not see it,
+         and the release stalled until a human ran the apply. The directory is not spelled
+         out here on purpose — `~` is a different place on every machine and a committed
+         `/Users/...` is WI-0132's defect, the same one the contract avoids.
+
+         `install-*.sh` renders this same file with a plain `sed` over a fixed token list
+         and does NOT add it, so a unit bootstrapped that way carries exactly the list
+         below until a cutover re-renders it. -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <key>PYTHONUNBUFFERED</key>
+        <string>1</string>
+    </dict>
+
+    <!-- Every 10 minutes, per the 2026-09-02 consultant brief's addendum.
+
+         Was nightly at 04:30. That cadence made the sweep a BACKSTOP: a tag pushed
+         at 10:00 did not deploy until the following morning, so the only way to see
+         a change land the same day was to ask someone at the Runner to run it — the
+         machine-bound handoff the 09-03 brief asks us to count as a defect, arriving
+         through the schedule rather than through the code.
+
+         A 600s poll is safe here precisely because the sweep is not the promotion
+         event: ADR-0103 D2 makes the TAG the promotion, and the sweep only notices
+         one. Polling more often therefore shortens the delay between a deliberate
+         act and its effect; it does not create additional promotions. RunAtLoad
+         stays false below for the same reason, and that reasoning is unchanged. -->
+    <key>StartInterval</key>
+    <integer>600</integer>
+
+    <!-- Deliberately false. A deploy sweep that fires on every login turns "I rebooted"
+         into a promotion event, which is the accidental-promotion failure ADR-0103 D2
+         exists to prevent, arriving through the back door. -->
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>StandardOutPath</key>
+    <string>__FED_ROOT__/.session-state/deploy-sweep.launchd.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>__FED_ROOT__/.session-state/deploy-sweep.launchd.err.log</string>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+</dict>
+</plist>

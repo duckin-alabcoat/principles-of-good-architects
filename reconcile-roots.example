@@ -1,0 +1,21 @@
+# reconcile-roots — search roots for `curate/reconcile.py --status`
+#
+# Copy this file to `reconcile-roots.local` (gitignored) and list the directories
+# on THIS machine that contain managed-system repos. The session-start hook scans
+# each root (bounded depth) for a system's `STATUS.md` and compares its version to
+# the federation's `inputs/<id>-arch.md` mirror, surfacing drift in orientation.
+#
+# Why a separate gitignored file: machine-specific filesystem paths stay out of
+# tracked files (P3 — data/system separation). reconcile.py never stores them.
+#
+# USE THIS MACHINE'S OWN VIEW. The same folders can have different paths per machine:
+# on the machine whose disk holds them they are local, while a machine that mounts
+# that disk sees them under its own mount point. A .local file carrying another
+# machine's view scans nothing and silently reports every system unreconciled.
+#
+# Format: one absolute path per line. Blank lines and `#` comments ignored.
+# Fewer, tighter roots = faster session start; add a root per place repos live.
+
+# For example:
+#   /Users/you/Projects
+#   /Users/you/Work

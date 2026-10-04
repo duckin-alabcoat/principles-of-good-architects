@@ -1,0 +1,713 @@
+# Public cut receipt
+
+Generated 2026-10-04 by `curate/public_cut.py` from `curate/public_cut_manifest.json` (manifest version 1).
+
+This cut is meant to be a GENERIC POGA SYSTEM. The manifest enforces directory boundaries: a withheld tree is never copied. The prose inside an included file is GATED, not proven -- the gates refuse every known shape of a name or a describing sentence, and a file that could not pass was withheld or replaced by an authored generic version. What was withheld is listed below so a reader can see the shape of the boundary, not just its result.
+
+- published: 513 file(s)
+- dropped: 13 file(s)
+- reduced: 10 file(s)
+- replaced by an authored overlay: 16 file(s)
+- added, public cut only: 1 file(s)
+- pending (listed, not yet authored): 0
+- binaries skipped: 0
+- findings: 0
+- waived by a named exemption: 51
+- links to a withheld path, unlinked: 79
+
+## Published
+
+- `.claude/settings.json`
+- `.github/workflows/ci.yml`
+- `.gitignore`
+- `AGENTS.md`
+- `CANON.md`
+- `CHANGELOG.md`
+- `CLAUDE.md`
+- `CONTRIBUTING.md`
+- `LICENSE`
+- `NOTICE`
+- `POGA-OVERVIEW-AND-SCALABILITY.md`
+- `PROCESS.md`
+- `README.md`
+- `STANDARD-REFERENCE.md`
+- `STANDARD.md`
+- `adr/0001-use-adrs.md`
+- `adr/0002-naming-convention.md`
+- `adr/0003-federation-architect-is-a-participant.md`
+- `adr/0004-auditor-as-separate-role-class.md`
+- `adr/0005-reviewer-split.md`
+- `adr/0006-naming-convention-corrected.md`
+- `adr/0007-github-as-system-storage-data-excluded.md`
+- `adr/0008-three-bucket-taxonomy.md`
+- `adr/0009-data-storage-mechanics.md`
+- `adr/0010-registries-canon-only-sidecar-history.md`
+- `adr/0011-data-root-config.md`
+- `adr/0012-per-architect-repo-conventions.md`
+- `adr/0013-receipt-ritual.md`
+- `adr/0014-existing-architect-retrofit.md`
+- `adr/0015-work-package-briefs.md`
+- `adr/0016-memory-is-local.md`
+- `adr/0017-bootstrapping-is-a-federation-responsibility.md`
+- `adr/0018-adopted-principles-and-habits-are-system.md`
+- `adr/0019-curate-gather-and-staging-boundary.md`
+- `adr/0020-session-rituals-are-a-code-harness.md`
+- `adr/0021-cross-system-status-surface.md`
+- `adr/0022-architect-ingest-distillation-and-code-channel.md`
+- `adr/0023-standard-operating-substrate.md`
+- `adr/0024-standard-role-doc-section-is-generated-and-injected.md`
+- `adr/0025-bootstrap-is-a-code-harness.md`
+- `adr/0026-cross-machine-execution-is-standard-substrate.md`
+- `adr/0027-federation-delivers-edits-into-target-inboxes.md`
+- `adr/0028-converge-inbox-model-onto-repo-local.md`
+- `adr/0029-receiving-architects-auto-adopt-at-startup.md`
+- `adr/0030-roadmap-deliverable-format-federation-owned.md`
+- `adr/0031-delivery-integrity-self-contained-briefs.md`
+- `adr/0032-session-label-derived-from-architect-id.md`
+- `adr/0033-non-derivable-data-is-backed-up-at-machine-level.md`
+- `adr/0034-settings-are-federation-pushed-generated-substrate.md`
+- `adr/0035-startup-turn-budget-inject-and-git-diagnosis.md`
+- `adr/0036-session-liveness-sidecar-and-orphan-auto-triage.md`
+- `adr/0037-repo-path-locator-map-unlocated-is-not-unonboarded.md`
+- `adr/0038-a-shared-resource-is-scoped-by-who-can-reach-it.md`
+- `adr/0039-appliable-brief-schema-and-auto-adopt-mechanism.md`
+- `adr/0041-runtime-agnostic-substrate-floor-contract-vs-binding.md`
+- `adr/0042-deployment-classes-and-promotion-discipline.md`
+- `adr/0043-session-stamps-posted-via-plain-stdout-hook.md`
+- `adr/0044-check-bash-auto-approves-safe-git.md`
+- `adr/0046-per-system-comms-surface.md`
+- `adr/0047-versioned-standard-substrate-and-rollout-reconciliation.md`
+- `adr/0048-federation-metrics-mining-layer.md`
+- `adr/0049-apply-auto-is-the-authoring-default.md`
+- `adr/0050-headless-background-adoption-runner.md`
+- `adr/0051-multi-session-concurrency-retire-the-master-session.md`
+- `adr/0052-canon-budget-and-consolidation-ritual.md`
+- `adr/0053-mined-ritual-conformance-and-spot-audit.md`
+- `adr/0054-heartbeat-on-tool-use-and-crash-reap-grace.md`
+- `adr/0055-lazy-session-start.md`
+- `adr/0056-session-branch-gated-trunk.md`
+- `adr/0057-same-tree-concurrency-attributed-commits.md`
+- `adr/0058-land-per-session-with-an-isolated-gate.md`
+- `adr/0059-same-tree-concurrency-fails-safe.md`
+- `adr/0060-concurrency-substrate-is-a-git-lifecycle-wrapper.md`
+- `adr/0061-poga-unified-lifecycle-cli-and-state-manifest.md`
+- `adr/0062-cross-lane-coordination-in-the-git-common-dir.md`
+- `adr/0063-poga-lanes-vs-orchestrated-subagents.md`
+- `adr/0065-restore-is-persona-free-and-briefs-are-version-gated.md`
+- `adr/0066-the-lane-land-owns-the-checkout-it-strands.md`
+- `adr/0067-adopt-in-place-is-the-third-onboarding-path.md`
+- `adr/0068-retire-the-declared-standard-version.md`
+- `adr/0069-shared-numbers-are-compiled-or-drawn-never-declared-or-picked.md`
+- `adr/0070-worktree-lanes-are-fleet-substrate.md`
+- `adr/0073-work-item-store.md`
+- `adr/0074-inbox-is-a-mailbox-triage-mints-work-items.md`
+- `adr/0075-dispatch-is-a-launcher-and-the-wave-trigger-is-the-landing-session.md`
+- `adr/0076-operational-work-is-its-own-kind.md`
+- `adr/0077-spawn-surface-is-detected-and-tmux-is-first-class.md`
+- `adr/0078-version-sets-are-planned-releases-are-harvested.md`
+- `adr/0080-the-federation-declares-its-project-version-at-6-0-0.md`
+- `adr/0081-a-major-is-declared-not-derived.md`
+- `adr/0082-lifecycle-inversion-and-per-session-runtime.md`
+- `adr/0084-a-major-ships-when-its-promise-is-complete.md`
+- `adr/0085-the-bootstrap-intake-is-a-session-launched-from-the-empty-folder.md`
+- `adr/0087-a-guard-whose-motivation-was-a-harness-limitation-retires-with-it.md`
+- `adr/0088-a-mailbox-is-gitignored-inbound-data-fleet-wide.md`
+- `adr/0089-a-lane-checkpoints-its-own-work-and-the-repo-recovers-it.md`
+- `adr/0090-the-substrate-owns-the-litter-it-creates.md`
+- `adr/0091-the-harness-commits-what-the-harness-writes.md`
+- `adr/0093-the-close-harvests-a-sessions-claims-into-its-journal.md`
+- `adr/0094-a-project-declares-its-data-the-backup-layer-owns-retrieval.md`
+- `adr/0095-shared-data-lives-outside-the-repo-under-a-declared-data-root.md`
+- `adr/0096-poga-refuses-a-launch-a-machine-cannot-host.md`
+- `adr/0097-a-lane-integrates-the-trunk-with-its-remote.md`
+- `adr/0098-a-lane-repairs-main-and-clears-its-own-blocked-rebase.md`
+- `adr/0099-the-user-is-not-an-execution-surface.md`
+- `adr/0100-dispatch-spawns-headless-the-operator-s-machine-attaches.md`
+- `adr/0101-a-lane-may-block-on-a-question-never-invisibly.md`
+- `adr/0102-integrate-merges-a-diverged-trunk-never-replays-it.md`
+- `adr/0103-promotion-is-a-tag-and-the-runner-runs-a-deploy-contract.md`
+- `adr/0104-a-session-closes-on-the-user-s-word-never-the-agent-s-judgment.md`
+- `adr/0105-roadmap-is-a-compiled-trunk-only-view.md`
+- `adr/0106-local-promotion-process-and-data-residency-are-declared-separately.md`
+- `adr/0107-mail-transits-origin-and-every-machine-drains-its-own-share.md`
+- `adr/0108-a-read-names-the-tree-and-commit-it-read.md`
+- `adr/0109-preflight-repairs-what-it-can-and-escalates-only-what-it-tried.md`
+- `adr/0110-a-delivery-verdict-declares-the-machine-its-evidence-covers.md`
+- `adr/0111-a-spawn-is-a-receipt-from-the-lane-not-a-launched-process.md`
+- `adr/0112-a-relayed-approval-cites-a-grant-not-a-peer.md`
+- `adr/0113-a-dispatched-lane-closes-on-its-dispatch.md`
+- `adr/0114-the-land-gate-is-serialized-one-at-a-time.md`
+- `adr/0115-the-resolvable-conflict-class-is-per-region-not-per-file.md`
+- `adr/0116-the-trunk-has-two-writers-and-now-one-door.md`
+- `adr/0117-a-land-classifies-its-own-diff-before-it-gates.md`
+- `adr/0118-session-py-is-a-package-behind-a-thin-entry-point.md`
+- `adr/0119-the-gates-three-side-doors-are-shut.md`
+- `adr/0120-renumbering-an-unlanded-adr-is-an-identifier-correction.md`
+- `adr/0122-validation-reuse-and-resumable-completion.md`
+- `adr/0123-the-role-doc-changelog-moves-to-a-tracked-sibling.md`
+- `adr/0124-the-land-lock-holds-the-merge-not-the-validation.md`
+- `adr/0125-an-unattended-run-closes-on-its-own-receipt.md`
+- `adr/0126-the-federation-couriers-a-members-mail-and-never-files-their-copy.md`
+- `adr/0127-the-gate-input-measurement-follows-its-own-subprocesses.md`
+- `adr/0128-each-gate-command-is-classified-against-its-own-measured-inputs.md`
+- `adr/0129-a-lane-is-named-by-its-session-and-addressed-by-its-slot.md`
+- `adr/0130-a-start-time-ordinal-is-provisional-on-every-surface.md`
+- `adr/0131-a-missing-verb-is-asked-of-origin-before-it-is-refused.md`
+- `adr/0132-a-deploy-result-is-published-by-the-machine-that-produced-it.md`
+- `adr/0133-evidence-is-separated-from-state-by-an-immovable-anchor.md`
+- `adr/0134-a-land-publishes-or-says-it-did-not.md`
+- `adr/0135-a-trunk-clone-is-never-a-process-root.md`
+- `adr/0136-the-standard-splits-into-an-injected-tier-and-a-reference-tier.md`
+- `adr/0137-the-canon-budget-is-a-land-gate-not-a-report.md`
+- `adr/0139-a-closed-work-item-stays-closed-and-a-residue-is-minted-fresh.md`
+- `adr/0140-the-integrate-validates-outside-the-land-gate.md`
+- `adr/0141-diagnosis-is-a-read-only-collector-that-publishes-on-a-state-change.md`
+- `adr/0142-a-release-candidate-is-a-tag-you-can-canary-but-never-deploy.md`
+- `adr/0143-a-lane-takes-one-item-and-closes-and-the-fleet-s-width-is-measured.md`
+- `adr/0144-canon-reaches-a-hookless-runtime-by-delivery.md`
+- `adr/0145-a-dispatch-brief-rides-the-orientation-not-the-argv.md`
+- `adr/0146-rehearsal-and-host-evidence-are-separate-and-neither-substitutes.md`
+- `adr/0147-a-closed-session-ends-its-own-runtime-and-publishes-what-it-leaves.md`
+- `adr/0148-a-land-is-a-merge.md`
+- `adr/0150-the-harness-gets-real-module-boundaries-behind-explicit-context-and-narrow-ports.md`
+- `adr/README.md`
+- `adr/template.md`
+- `bootstrap-kit/CANON.md`
+- `bootstrap-kit/README.md`
+- `bootstrap-kit/STANDARD-REFERENCE.md`
+- `bootstrap-kit/STANDARD.md`
+- `bootstrap-kit/adr-readme-template.md`
+- `bootstrap-kit/adr-template.md`
+- `bootstrap-kit/appliable-brief-template.md`
+- `bootstrap-kit/architect-learnings-template.md`
+- `bootstrap-kit/binding-template.md`
+- `bootstrap-kit/claude-md-template.md`
+- `bootstrap-kit/claude-settings-template.json`
+- `bootstrap-kit/dual-runtime-governance.md`
+- `bootstrap-kit/git-hooks/pre-commit`
+- `bootstrap-kit/git-hooks/pre-push`
+- `bootstrap-kit/gitignore-template`
+- `bootstrap-kit/intake-prompt.md`
+- `bootstrap-kit/readme-template.md`
+- `bootstrap-kit/roadmap-template.md`
+- `bootstrap-kit/role-doc-template.md`
+- `bootstrap-kit/session-handoff-template.md`
+- `bootstrap-kit/session.config.json`
+- `bootstrap-kit/status-template.md`
+- `bootstrap-kit/user-profile-template.md`
+- `bootstrap-spec.example.json`
+- `bootstrap-spec.federation.json`
+- `bootstrap.py`
+- `credentials-manifest.schema.json`
+- `curate/adopt-runner.py`
+- `curate/adoption_metrics.py`
+- `curate/channel.py`
+- `curate/check-apply.py`
+- `curate/check-binding.py`
+- `curate/check-brief.py`
+- `curate/check_canon_budget.py`
+- `curate/check_citations.py`
+- `curate/check_reply.py`
+- `curate/check_substrate_docs.py`
+- `curate/childaudit/poga_child_audit.py`
+- `curate/childaudit/sitecustomize.py`
+- `curate/common.py`
+- `curate/deliver.py`
+- `curate/distill.py`
+- `curate/finish_line.py`
+- `curate/gate-inputs-runner.py`
+- `curate/gate_inputs.py`
+- `curate/gather.py`
+- `curate/gen_indexes.py`
+- `curate/gen_registry.py`
+- `curate/gen_settings.py`
+- `curate/mail-poller.py`
+- `curate/mailacceptance.py`
+- `curate/maildelivery.py`
+- `curate/mailnames.py`
+- `curate/mailqueue.py`
+- `curate/mailrehearsal.py`
+- `curate/mailtransport.py`
+- `curate/mailworker.py`
+- `curate/metrics.py`
+- `curate/outbox.py`
+- `curate/production.py`
+- `curate/public_cut.py`
+- `curate/public_cut_manifest.json`
+- `curate/push-substrate.py`
+- `curate/reconcile.py`
+- `curate/run_suite.py`
+- `curate/scrub.py`
+- `curate/standard_version.py`
+- `curate/standardize.py`
+- `curate/store_guard.py`
+- `curate/storeguard_child/sitecustomize.py`
+- `curate/token_ledger.py`
+- `deploy/README.md`
+- `deploy/com.federation.adopt-runner.plist.template`
+- `deploy/com.federation.deploy-sweep.plist.template`
+- `deploy/com.federation.gate-inputs.plist.template`
+- `deploy/com.federation.mail-poller.plist.template`
+- `deploy/contract.schema.json`
+- `deploy/deploy.json`
+- `deploy/devbox_mail.py`
+- `deploy/diagnose.py`
+- `deploy/install-adopt-runner.sh`
+- `deploy/install-deploy-sweep.sh`
+- `deploy/install-gate-inputs.sh`
+- `deploy/install-mail-poller.sh`
+- `deploy/install-mail-worker-daemon.sh`
+- `deploy/install-mail-worker.py`
+- `deploy/legacydeps.py`
+- `deploy/mail-acceptance.md`
+- `deploy/mail-worker.plist.partial`
+- `deploy/migrate.py`
+- `deploy/production-state.md`
+- `deploy/registry.json`
+- `deploy/retire_clone.py`
+- `deploy/runner.py`
+- `deploy/schedulerguard.py`
+- `deploy/seed-paths.local.example.json`
+- `design/curate-pass-harness.md`
+- `design/harness-module-boundaries.md`
+- `design/inbox-auto-adopt.md`
+- `docs/configuration.md`
+- `docs/first-task.md`
+- `drills/basic-acceptance.md`
+- `drills/basic-acceptance.sh`
+- `drills/first-task-live.md`
+- `drills/runtime-acceptance.py`
+- `examples/multi-machine/README.md`
+- `examples/multi-machine/deploy/deploy.json`
+- `examples/multi-machine/org.example.poga.adopt-runner.plist`
+- `examples/multi-machine/org.example.poga.nightly-suite.plist`
+- `examples/multi-machine/poga.local.example`
+- `examples/multi-machine/repo-paths.example`
+- `examples/multi-machine/session.config.json`
+- `federation-arch.md`
+- `fleet-cadence.json`
+- `habits/master-history.md`
+- `habits/master.md`
+- `interpreter.py`
+- `mailboxes.json`
+- `poga`
+- `poga.local.example`
+- `poga_cli.py`
+- `poga_evidence.py`
+- `portfolio.md`
+- `principles/master-history.md`
+- `principles/master.md`
+- `reconcile-roots.example`
+- `releases/federation/7.6.0.md`
+- `repo-paths.example`
+- `session.config.json`
+- `session.py`
+- `sessionlib/__init__.py`
+- `sessionlib/brief.py`
+- `sessionlib/config.py`
+- `sessionlib/coord.py`
+- `sessionlib/goal.py`
+- `sessionlib/hooks.py`
+- `sessionlib/journal.py`
+- `sessionlib/land.py`
+- `sessionlib/lanes.py`
+- `sessionlib/registry_state.py`
+- `sessionlib/store.py`
+- `sessionlib/trunkcheck.py`
+- `specs/user-profile-storage.md`
+- `standard-capabilities.json`
+- `standard-settings.json`
+- `standard-source.md`
+- `standard_check.py`
+- `state-manifest.md`
+- `state-manifest.schema.json`
+- `tests/ambient_fixture.py`
+- `tests/cli_surface.snapshot.json`
+- `tests/coord_fixture.py`
+- `tests/harness_fixture.py`
+- `tests/macos_only.py`
+- `tests/member_fixture.py`
+- `tests/substrate_voice.py`
+- `tests/test_a_failing_gate_names_the_test.py`
+- `tests/test_addendum.py`
+- `tests/test_adopt_runner.py`
+- `tests/test_adopt_runner_deploy_exclusion.py`
+- `tests/test_adopt_runner_e2e.py`
+- `tests/test_adopt_runner_preflight_reason.py`
+- `tests/test_adoption_metrics.py`
+- `tests/test_adr_alloc.py`
+- `tests/test_adr_declared_holes.py`
+- `tests/test_adr_renumber.py`
+- `tests/test_ambient_fixture_guard.py`
+- `tests/test_apply.py`
+- `tests/test_attach.py`
+- `tests/test_attention.py`
+- `tests/test_board_ensure.py`
+- `tests/test_bootstrap_adopt.py`
+- `tests/test_brief_module.py`
+- `tests/test_bytecode_repair_doc.py`
+- `tests/test_canon_budget_gate.py`
+- `tests/test_capability_manifest.py`
+- `tests/test_check_apply.py`
+- `tests/test_check_binding.py`
+- `tests/test_check_brief.py`
+- `tests/test_check_citations.py`
+- `tests/test_check_reply.py`
+- `tests/test_check_substrate_docs.py`
+- `tests/test_checkout_staleness.py`
+- `tests/test_ci_linux_job.py`
+- `tests/test_claims.py`
+- `tests/test_cli_registration.py`
+- `tests/test_cloud_container.py`
+- `tests/test_cloud_first_run.py`
+- `tests/test_codex_land.py`
+- `tests/test_common.py`
+- `tests/test_coord.py`
+- `tests/test_coord_fixture_guard.py`
+- `tests/test_cut_withheld_reads.py`
+- `tests/test_data_root.py`
+- `tests/test_dead_holder.py`
+- `tests/test_decisions_view.py`
+- `tests/test_deliver.py`
+- `tests/test_deliver_alias_and_locator.py`
+- `tests/test_deploy_apply_receipt.py`
+- `tests/test_deploy_drill.py`
+- `tests/test_deploy_refusal_reaches_the_ledger.py`
+- `tests/test_deploy_runner.py`
+- `tests/test_deploy_sealed_root.py`
+- `tests/test_deploy_self.py`
+- `tests/test_deploy_short_circuit_needs_a_vouched_status.py`
+- `tests/test_deploy_status_is_bound_to_its_tag.py`
+- `tests/test_detect_machine.py`
+- `tests/test_devbox_mail.py`
+- `tests/test_diagnose.py`
+- `tests/test_dispatch.py`
+- `tests/test_dispatch_fixture_guard.py`
+- `tests/test_distill.py`
+- `tests/test_escalation_ledger.py`
+- `tests/test_federation_mail_release_e2e.py`
+- `tests/test_federation_migration.py`
+- `tests/test_federation_rehearsal.py`
+- `tests/test_finish_line.py`
+- `tests/test_fixture_git_defaults.py`
+- `tests/test_gate_input_deriver_is_serial.py`
+- `tests/test_gate_inputs_child_audit.py`
+- `tests/test_gate_inputs_runner.py`
+- `tests/test_gate_probe_timeout.py`
+- `tests/test_gate_record_is_not_a_suite_input.py`
+- `tests/test_gate_runs_the_store_validator.py`
+- `tests/test_gate_snapshot.py`
+- `tests/test_gather.py`
+- `tests/test_gen_indexes.py`
+- `tests/test_gen_settings.py`
+- `tests/test_goal.py`
+- `tests/test_grants.py`
+- `tests/test_harness_commits.py`
+- `tests/test_integrate_holds_no_suite.py`
+- `tests/test_interpreter.py`
+- `tests/test_janitor.py`
+- `tests/test_journal_frontmatter_guard.py`
+- `tests/test_land_cas_budget.py`
+- `tests/test_land_duration_clock.py`
+- `tests/test_land_gate_liveness.py`
+- `tests/test_land_gate_lock.py`
+- `tests/test_land_is_a_merge.py`
+- `tests/test_land_lock_holds_only_the_merge.py`
+- `tests/test_land_publishes.py`
+- `tests/test_land_refuses_a_stale_trunk.py`
+- `tests/test_lane_alloc.py`
+- `tests/test_lane_close_after_land.py`
+- `tests/test_lane_exit.py`
+- `tests/test_lane_identity.py`
+- `tests/test_lane_litter.py`
+- `tests/test_lane_recovery.py`
+- `tests/test_lane_rollback.py`
+- `tests/test_lane_store_writes.py`
+- `tests/test_lane_trunk_distance.py`
+- `tests/test_layout_resolver.py`
+- `tests/test_leases.py`
+- `tests/test_legacydeps.py`
+- `tests/test_linux_portability.py`
+- `tests/test_live_store_fixture_guard.py`
+- `tests/test_local_init.py`
+- `tests/test_mail_poller_sweep.py`
+- `tests/test_mail_self_healing.py`
+- `tests/test_mail_worker.py`
+- `tests/test_mailacceptance.py`
+- `tests/test_maildelivery.py`
+- `tests/test_mailnames.py`
+- `tests/test_mailtransport.py`
+- `tests/test_main_materialization.py`
+- `tests/test_member_layout_paths.py`
+- `tests/test_member_locator_is_external.py`
+- `tests/test_metrics.py`
+- `tests/test_note_record_duplicates.py`
+- `tests/test_notes_file.py`
+- `tests/test_ops_items.py`
+- `tests/test_ops_renumber.py`
+- `tests/test_outbox.py`
+- `tests/test_permission_pile.py`
+- `tests/test_phantom_lane_discard.py`
+- `tests/test_pid_liveness.py`
+- `tests/test_poga_cli.py`
+- `tests/test_poga_evidence.py`
+- `tests/test_poga_fleet.py`
+- `tests/test_poga_install.py`
+- `tests/test_poga_intake.py`
+- `tests/test_preflight.py`
+- `tests/test_preflight_narrow_skip.py`
+- `tests/test_preflight_repair.py`
+- `tests/test_prep_adoption.py`
+- `tests/test_production_mail_state.py`
+- `tests/test_public_adr_index.py`
+- `tests/test_public_cut.py`
+- `tests/test_push_substrate.py`
+- `tests/test_reconcile.py`
+- `tests/test_reconcile_idless_status.py`
+- `tests/test_reconcile_residency.py`
+- `tests/test_reconcile_roster_root.py`
+- `tests/test_registry_state.py`
+- `tests/test_release_standard.py`
+- `tests/test_release_tags.py`
+- `tests/test_releases.py`
+- `tests/test_remote_provenance.py`
+- `tests/test_renumber_tombstone.py`
+- `tests/test_reservation_ownership.py`
+- `tests/test_residency.py`
+- `tests/test_residency_adoption.py`
+- `tests/test_resident_runtime_lane.py`
+- `tests/test_resume_at_the_failed_stage.py`
+- `tests/test_retire_parked.py`
+- `tests/test_retired_inbox.py`
+- `tests/test_retitle_is_not_a_collision.py`
+- `tests/test_roadmap_compile.py`
+- `tests/test_run_suite.py`
+- `tests/test_runner_channel.py`
+- `tests/test_runtime_registry.py`
+- `tests/test_scheduler_guard.py`
+- `tests/test_scrub.py`
+- `tests/test_serial_run_files_a_verdict.py`
+- `tests/test_session.py`
+- `tests/test_session_branch.py`
+- `tests/test_session_close_exit.py`
+- `tests/test_stale_substrate_recovery.py`
+- `tests/test_standard_check.py`
+- `tests/test_standard_tiers.py`
+- `tests/test_standard_version.py`
+- `tests/test_standard_version_gate.py`
+- `tests/test_store_guard.py`
+- `tests/test_stub_scope_guard.py`
+- `tests/test_substrate_voice.py`
+- `tests/test_suite_write_floor.py`
+- `tests/test_tagged_contracts_still_validate.py`
+- `tests/test_test_verb_runs_the_gates_suite.py`
+- `tests/test_test_verdict.py`
+- `tests/test_the_gate_releases_only_what_it_holds.py`
+- `tests/test_token_ledger.py`
+- `tests/test_tree_provenance.py`
+- `tests/test_trunk_check.py`
+- `tests/test_trunk_lock.py`
+- `tests/test_trunk_only_views.py`
+- `tests/test_trunk_suite_verdict.py`
+- `tests/test_wi_alloc_release.py`
+- `tests/test_wi_chart.py`
+- `tests/test_wi_commit.py`
+- `tests/test_wi_done_evidence.py`
+- `tests/test_wi_done_is_terminal.py`
+- `tests/test_wi_feed.py`
+- `tests/test_wi_impact.py`
+- `tests/test_wi_notes.py`
+- `tests/test_wi_render.py`
+- `tests/test_wi_renumber.py`
+- `tests/test_wi_scope.py`
+- `tests/test_wi_stale.py`
+- `tests/test_wi_waiting_on.py`
+- `tests/test_worktree_lane.py`
+- `users/operator/profile.md`
+- `work-items/WI-0278-mid-session-escalations-have-no-durable.md`
+- `work-items/WI-0290-the-adr-counter-still-has-no-renumberer.md`
+- `work-items/WI-0330-build-the-decisions-view-wi-0288-r3-5-th.md`
+- `work-items/WI-0356-a-land-behind-origin-proceeds-on-a-warni.md`
+- `work-items/WI-0380-poga-work-status-refuses-done-to-open-an.md`
+- `work-items/WI-0427-a-land-is-a-merge-take-validation-off-th.md`
+
+## Reduced rather than dropped
+
+- `portfolio.md` — **public-overlay**
+- `deploy/registry.json` — **registry-self-row-only**
+- `mailboxes.json` — **empty-mailboxes**
+- `users/operator/profile.md` — **blank-operator-profile**
+- `curate/public_cut_manifest.json` — **manifest-public**
+- `.gitignore` — **gitignore-public**
+- `session.config.json` — **session-config-public**
+- `fleet-cadence.json` — **fleet-cadence-public**
+- `.claude/settings.json` — **json-notes-stripped**
+- `deploy/deploy.json` — **json-notes-stripped**
+
+## Replaced by an authored overlay
+
+Each of these ships the authored generic text from `public-overlay/`, not the source file at the same path. The overlay passed the same gates as any file.
+
+- `adr/0021-cross-system-status-surface.md`
+- `adr/0024-standard-role-doc-section-is-generated-and-injected.md`
+- `adr/0028-converge-inbox-model-onto-repo-local.md`
+- `adr/0038-a-shared-resource-is-scoped-by-who-can-reach-it.md`
+- `adr/0041-runtime-agnostic-substrate-floor-contract-vs-binding.md`
+- `adr/0042-deployment-classes-and-promotion-discipline.md`
+- `adr/0067-adopt-in-place-is-the-third-onboarding-path.md`
+- `adr/0082-lifecycle-inversion-and-per-session-runtime.md`
+- `adr/0088-a-mailbox-is-gitignored-inbound-data-fleet-wide.md`
+- `adr/0094-a-project-declares-its-data-the-backup-layer-owns-retrieval.md`
+- `adr/0147-a-closed-session-ends-its-own-runtime-and-publishes-what-it-leaves.md`
+- `adr/README.md`
+- `curate/gen_registry.py`
+- `design/curate-pass-harness.md`
+- `federation-arch.md`
+- `portfolio.md`
+
+## Added in the public cut only
+
+Each of these exists only in the public cut: it is authored under `public-overlay/` and the internal tree never carries it at this path. It passed the same gates as any file.
+
+- `.github/workflows/ci.yml` — the public copies run their own test suite on every push; the internal origin is a private repo that must run no Actions, so this file exists only in the public cuts (external review 2026-09-30)
+
+## Listed in the manifest and not yet authored
+
+None.
+
+## Withheld by the boundary
+
+Every entry in the manifest's `exclude` list. Measured from the manifest against the tree and NOT from the copy walk — the walk only visits paths under an `include` entry, so a wholly separate tree would otherwise be reported as nothing withheld at all.
+
+- `portfolio.md` — **public-overlay**, withheld — the roster IS the member list, and its prose describes the members (residency, sources, relations) as surely as its rows name them. Ships ONLY as the authored template at public-overlay/portfolio.md (see `replace`); the row-stripped shell left that prose behind (consultant brief 2026-09-27, item 2). The member-name class still reads the REAL roster from the root.
+- `deploy/registry.json` — **registry-self-row-only**, withheld — names every member system's git remote. Ships with the `self` row alone, which is POGA deploying itself.
+- `mailboxes.json` — **empty-mailboxes**, withheld — the mailbox list is a member list with machine residency attached. Ships structurally valid and empty.
+- `users` — **blank-operator-profile**, withheld — the operator's profile is the most personal data in the repo. Ships as ONE blank users/operator/profile.md from the kit template (WI-0383).
+- `comms` — withheld — agent-to-operator notes about live member systems
+- `outbox` — withheld — outbound member mail
+- `proposed-edits` — withheld — member briefs, all four states -- pending, accepted, applied, rejected
+- `inputs` — withheld — mirrored member producer files. Absent from this tree today; named anyway, because an exclude that only lists what happens to exist is not a boundary.
+- `sessions` — withheld — session journals -- the working record, sampled rather than shipped whole
+- `session-handoff-archive` — withheld — the same, historically
+- `work-items` — withheld — the live backlog, sampled rather than shipped whole
+- `ops-items` — withheld — the live obligations, sampled rather than shipped whole
+- `curate-runs` — withheld — curate run records over member producer files. Absent today; named anyway.
+- `audits` — withheld — audit reports naming member systems
+- `drills` — withheld — drill records against live members
+- `restore` — withheld — restore state
+- `releases` — withheld — internal release records
+- `proposals` — withheld — in-flight proposals
+- `briefs` — withheld — authored briefs about member systems
+- `.claude/worktrees` — withheld — EVERY LIVE LANE. Lives under .claude/, which is why .claude/ is included as one named file and never as a tree.
+- `__pycache__` — withheld — build artifact
+- `retrofit-reports` — withheld — per-member retrofit reports
+- `(a withheld file)` — withheld — withheld from this copy
+- `(a withheld file)` — withheld — withheld from this copy
+- `err` — withheld — stray command output committed by accident
+- `curate/public_cut_manifest.json` — **manifest-public**, withheld — this boundary. Ships with its substitution table, protected phrases and extra names WITHHELD -- they name what they hide.
+- `.gitignore` — **gitignore-public**, withheld — the data/system boundary. Ships with a re-include for each top-level path the cut publishes that the internal rules ignore.
+- `public-overlay` — withheld — authored generic replacements. Never copied as a tree: each file ships only through a `replace` row, at the path that row names.
+- `session.config.json` — **session-config-public**, withheld — the live config names the operator's time zone, machines and profile path, and its notes are his working history; the public copy is generated from it with those replaced (WI-0448)
+- `fleet-cadence.json` — **fleet-cadence-public**, withheld — every row but the federation's names a member and whether it is parked (WI-0448, cold audit round 1)
+- `.claude/settings.json` — **json-notes-stripped**, withheld — the generated settings carry the operator's working-history notes; the public copy is the same settings with every `//` note dropped (WI-0448, cold audit round 2)
+- `deploy/deploy.json` — **json-notes-stripped**, withheld — its notes are working history (WI-0448, cold audit round 4)
+- `(a withheld file)` — withheld — withheld from this copy
+- `(a withheld file)` — withheld — withheld from this copy
+- `(a withheld file)` — withheld — withheld from this copy
+- `(a withheld file)` — withheld — withheld from this copy
+- 22 further file(s) at named paths — their names are withheld with them
+
+## Dropped from inside an included tree
+
+- 1 file(s) — asserts against deploy/clone-retirement.json, which is withheld, so it cannot pass in the cut (WI-0447)
+- 1 file(s) — curate run state: which member producer entries have been read
+- 1 file(s) — tests the withheld member-tool view (WI-0448, cold audit round 1)
+- 1 file(s) — the retirement rules for named members' clones -- each rule describes a member's product (WI-0383 round-2 audit)
+- 1 file(s) — withheld with ADR-0149: it asserts the live portfolio's member rows, which the cut's template replaces
+- 1 file(s) — withheld with ADR-0149: it reads a portfolio section the cut's template portfolio does not carry
+- 1 file(s) — withheld: the decision is two named members' handoff files, so its prose describes members (the strict cut, 2026-09-26)
+- some records — withheld from this copy
+
+## The curated sample
+
+- `work-items/WI-0290-the-adr-counter-still-has-no-renumberer.md` → `work-items/WI-0290-the-adr-counter-still-has-no-renumberer.md` — THE LOOP. A finding recorded 09-05; governed by ADR-0120 (decided in a lane under a standing delegation); built and landed 09-24 as b6d2292f; harvested into 7.6.0; deployed the same day. Item and every note
+- `releases/federation/7.6.0.md` → `releases/federation/7.6.0.md` — THE LOOP, release: the record that harvested WI-0290 into a derived minor
+- `work-items/WI-0330-build-the-decisions-view-wi-0288-r3-5-th.md` → `work-items/WI-0330-build-the-decisions-view-wi-0288-r3-5-th.md` — LIFECYCLE, build: the split-out decisions view, shipped in 7.1.0 with an eight-mutation sweep; closes WI-0288
+- `work-items/WI-0380-poga-work-status-refuses-done-to-open-an.md` → `work-items/WI-0380-poga-work-status-refuses-done-to-open-an.md` — LIFECYCLE, enforcement: ADR-0139 made mechanical -- done-to-open is refused and the refusal prints the mint-fresh remedy
+- `work-items/WI-0356-a-land-behind-origin-proceeds-on-a-warni.md` → `work-items/WI-0356-a-land-behind-origin-proceeds-on-a-warni.md` — LANDING: a land behind origin proceeded on a warning; now a gate, each state watched going red; includes a refused rollback and a stranded-lane disposition
+- `work-items/WI-0278-mid-session-escalations-have-no-durable.md` → `work-items/WI-0278-mid-session-escalations-have-no-durable.md` — RECORD: mid-session escalations get a durable record, so the escalations metric counts what happened rather than what a session remembered
+- `work-items/WI-0427-a-land-is-a-merge-take-validation-off-th.md` → `work-items/WI-0427-a-land-is-a-merge-take-validation-off-th.md` — BRIEF TO BUILD: a consultant brief taken to landed code -- a land is a merge, validation leaves the land path (ADR-0148)
+- `drills/runtime-acceptance.py` → `drills/runtime-acceptance.py` — RUNTIMES: the drill that stamps a runtime record against a disposable repo
+- `drills/basic-acceptance.md` → `drills/basic-acceptance.md` — BASIC ACCEPTANCE: the record the README's 'Try it' cites -- one project, one task through claim, checkpoint, resume, verify and land, a lesson reaching a second project, from a fresh export in a sandbox (WI-0455)
+- `drills/basic-acceptance.sh` → `drills/basic-acceptance.sh` — BASIC ACCEPTANCE: the driver that reproduces that record from a fresh export (WI-0455)
+- `drills/first-task-live.md` → `drills/first-task-live.md` — FIRST TASK, LIVE: the record of docs/first-task.md walked for real from a fresh export, so the guide's steps are evidence and not only instructions (external review 2026-09-30)
+
+## Substitutions
+
+The cut took mechanical substitutions. Neither the ORIGINALS nor a count is printed here: a receipt that quoted them would undo every placeholder in the cut, and a count describes the source. The line-by-line detail is written to a private receipt beside the cut directory, for the person who runs the cut, and is never published.
+
+## Renamed
+
+6 published path(s) were renamed; links to them were rewritten to match.
+
+## Waived by a named exemption
+
+These matched a gate and were allowed through, because containing that shape is the file's purpose — the detector's own source, and the tests that prove it fires. Each is printed with file and line: an exemption that does not show its work is how a gate rots into decoration.
+
+- `adr/0101-a-lane-may-block-on-a-question-never-invisibly.md`:114 **[operator-availability]** — a design case (a relay channel read off the machine), not where the operator was
+- `adr/0141-diagnosis-is-a-read-only-collector-that-publishes-on-a-state-change.md`:116 **[private-ip]** — the decision record for the redactor and for two defects in scrub.py's own patterns (D4, D7). It quotes the shapes the patterns match -- fake values, never real ones -- because the defects cannot be stated without them.
+- `adr/0141-diagnosis-is-a-read-only-collector-that-publishes-on-a-state-change.md`:117 **[credential]** — the decision record for the redactor and for two defects in scrub.py's own patterns (D4, D7). It quotes the shapes the patterns match -- fake values, never real ones -- because the defects cannot be stated without them.
+- `adr/0141-diagnosis-is-a-read-only-collector-that-publishes-on-a-state-change.md`:117 **[wifi-secret]** — the decision record for the redactor and for two defects in scrub.py's own patterns (D4, D7). It quotes the shapes the patterns match -- fake values, never real ones -- because the defects cannot be stated without them.
+- `adr/0141-diagnosis-is-a-read-only-collector-that-publishes-on-a-state-change.md`:117 **[dob]** — the decision record for the redactor and for two defects in scrub.py's own patterns (D4, D7). It quotes the shapes the patterns match -- fake values, never real ones -- because the defects cannot be stated without them.
+- `adr/0141-diagnosis-is-a-read-only-collector-that-publishes-on-a-state-change.md`:120 **[credential]** — the decision record for the redactor and for two defects in scrub.py's own patterns (D4, D7). It quotes the shapes the patterns match -- fake values, never real ones -- because the defects cannot be stated without them.
+- `adr/0141-diagnosis-is-a-read-only-collector-that-publishes-on-a-state-change.md`:150 **[private-ip]** — the decision record for the redactor and for two defects in scrub.py's own patterns (D4, D7). It quotes the shapes the patterns match -- fake values, never real ones -- because the defects cannot be stated without them.
+- `adr/0141-diagnosis-is-a-read-only-collector-that-publishes-on-a-state-change.md`:151 **[private-ip]** — the decision record for the redactor and for two defects in scrub.py's own patterns (D4, D7). It quotes the shapes the patterns match -- fake values, never real ones -- because the defects cannot be stated without them.
+- `adr/0141-diagnosis-is-a-read-only-collector-that-publishes-on-a-state-change.md`:155 **[private-ip]** — the decision record for the redactor and for two defects in scrub.py's own patterns (D4, D7). It quotes the shapes the patterns match -- fake values, never real ones -- because the defects cannot be stated without them.
+- `bootstrap-kit/user-profile-template.md`:5 **[operator-preference]** — the blank template's own scope sentence; it states no preference
+- `curate/scrub.py`:43 **[private-ip]** — THE DETECTOR'S OWN SOURCE. This file IS the nine patterns, so it necessarily contains the shapes it matches -- its docstring even renders a masked example. A detector that cannot be published without tripping itself is not a leak.
+- `curate/scrub.py`:44 **[private-ip]** — THE DETECTOR'S OWN SOURCE. This file IS the nine patterns, so it necessarily contains the shapes it matches -- its docstring even renders a masked example. A detector that cannot be published without tripping itself is not a leak.
+- `curate/scrub.py`:75 **[dob]** — THE DETECTOR'S OWN SOURCE. This file IS the nine patterns, so it necessarily contains the shapes it matches -- its docstring even renders a masked example. A detector that cannot be published without tripping itself is not a leak.
+- `curate/scrub.py`:76 **[dob]** — THE DETECTOR'S OWN SOURCE. This file IS the nine patterns, so it necessarily contains the shapes it matches -- its docstring even renders a masked example. A detector that cannot be published without tripping itself is not a leak.
+- `curate/scrub.py`:90 **[private-ip]** — THE DETECTOR'S OWN SOURCE. This file IS the nine patterns, so it necessarily contains the shapes it matches -- its docstring even renders a masked example. A detector that cannot be published without tripping itself is not a leak.
+- `curate/scrub.py`:173 **[credential]** — THE DETECTOR'S OWN SOURCE. This file IS the nine patterns, so it necessarily contains the shapes it matches -- its docstring even renders a masked example. A detector that cannot be published without tripping itself is not a leak.
+- `curate/scrub.py`:173 **[wifi-secret]** — THE DETECTOR'S OWN SOURCE. This file IS the nine patterns, so it necessarily contains the shapes it matches -- its docstring even renders a masked example. A detector that cannot be published without tripping itself is not a leak.
+- `curate/scrub.py`:173 **[dob]** — THE DETECTOR'S OWN SOURCE. This file IS the nine patterns, so it necessarily contains the shapes it matches -- its docstring even renders a masked example. A detector that cannot be published without tripping itself is not a leak.
+- `curate/scrub.py`:176 **[credential]** — THE DETECTOR'S OWN SOURCE. This file IS the nine patterns, so it necessarily contains the shapes it matches -- its docstring even renders a masked example. A detector that cannot be published without tripping itself is not a leak.
+- `tests/test_diagnose.py`:366 **[private-ip]** — asserts the diagnosis redactor removes a LAN address from a log tail; the fixture must carry one.
+- `tests/test_diagnose.py`:370 **[private-ip]** — asserts the diagnosis redactor removes a LAN address from a log tail; the fixture must carry one.
+- `tests/test_mailtransport.py`:798 **[private-ip]** — asserts the mail worker's second gate refuses a LAN address that skipped the first; the fixture must carry one.
+- `tests/test_outbox.py`:68 **[private-ip]** — the scrub gate's own tests. They assert that a LAN address and a credential assignment are REFUSED, which they can only do by containing one.
+- `tests/test_outbox.py`:69 **[private-ip]** — the scrub gate's own tests. They assert that a LAN address and a credential assignment are REFUSED, which they can only do by containing one.
+- `tests/test_outbox.py`:78 **[private-ip]** — the scrub gate's own tests. They assert that a LAN address and a credential assignment are REFUSED, which they can only do by containing one.
+- `tests/test_outbox.py`:80 **[private-ip]** — the scrub gate's own tests. They assert that a LAN address and a credential assignment are REFUSED, which they can only do by containing one.
+- `tests/test_outbox.py`:96 **[credential]** — the scrub gate's own tests. They assert that a LAN address and a credential assignment are REFUSED, which they can only do by containing one.
+- `tests/test_outbox.py`:108 **[private-ip]** — the scrub gate's own tests. They assert that a LAN address and a credential assignment are REFUSED, which they can only do by containing one.
+- `tests/test_outbox.py`:150 **[private-ip]** — the scrub gate's own tests. They assert that a LAN address and a credential assignment are REFUSED, which they can only do by containing one.
+- `tests/test_production_mail_state.py`:140 **[private-ip]** — asserts the mail queue refuses a payload carrying a LAN address; the fixture must carry one for the assertion to mean anything.
+- `tests/test_scrub.py`:18 **[credential]** — the scrub gate's OWN unit tests: each asserts a class is caught, which it can only do by containing one. Same shape as the tests/test_outbox.py row.
+- `tests/test_scrub.py`:40 **[private-ip]** — the scrub gate's OWN unit tests: each asserts a class is caught, which it can only do by containing one. Same shape as the tests/test_outbox.py row.
+- `tests/test_scrub.py`:41 **[overlay-ip]** — the scrub gate's OWN unit tests: each asserts a class is caught, which it can only do by containing one. Same shape as the tests/test_outbox.py row.
+- `tests/test_scrub.py`:42 **[mac-address]** — the scrub gate's OWN unit tests: each asserts a class is caught, which it can only do by containing one. Same shape as the tests/test_outbox.py row.
+- `tests/test_scrub.py`:43 **[credential]** — the scrub gate's OWN unit tests: each asserts a class is caught, which it can only do by containing one. Same shape as the tests/test_outbox.py row.
+- `tests/test_scrub.py`:44 **[ssn]** — the scrub gate's OWN unit tests: each asserts a class is caught, which it can only do by containing one. Same shape as the tests/test_outbox.py row.
+- `tests/test_scrub.py`:45 **[phone]** — the scrub gate's OWN unit tests: each asserts a class is caught, which it can only do by containing one. Same shape as the tests/test_outbox.py row.
+- `tests/test_scrub.py`:46 **[street-address]** — the scrub gate's OWN unit tests: each asserts a class is caught, which it can only do by containing one. Same shape as the tests/test_outbox.py row.
+- `tests/test_scrub.py`:47 **[wifi-secret]** — the scrub gate's OWN unit tests: each asserts a class is caught, which it can only do by containing one. Same shape as the tests/test_outbox.py row.
+- `tests/test_scrub.py`:48 **[dob]** — the scrub gate's OWN unit tests: each asserts a class is caught, which it can only do by containing one. Same shape as the tests/test_outbox.py row.
+- `tests/test_scrub.py`:73 **[credential]** — the scrub gate's OWN unit tests: each asserts a class is caught, which it can only do by containing one. Same shape as the tests/test_outbox.py row.
+- `tests/test_scrub.py`:75 **[credential]** — the scrub gate's OWN unit tests: each asserts a class is caught, which it can only do by containing one. Same shape as the tests/test_outbox.py row.
+- `tests/test_scrub.py`:83 **[private-ip]** — the scrub gate's OWN unit tests: each asserts a class is caught, which it can only do by containing one. Same shape as the tests/test_outbox.py row.
+- `tests/test_scrub.py`:84 **[private-ip]** — the scrub gate's OWN unit tests: each asserts a class is caught, which it can only do by containing one. Same shape as the tests/test_outbox.py row.
+- `tests/test_scrub.py`:102 **[private-ip]** — the scrub gate's OWN unit tests: each asserts a class is caught, which it can only do by containing one. Same shape as the tests/test_outbox.py row.
+- `tests/test_scrub.py`:102 **[private-ip]** — the scrub gate's OWN unit tests: each asserts a class is caught, which it can only do by containing one. Same shape as the tests/test_outbox.py row.
+- `tests/test_scrub.py`:102 **[mac-address]** — the scrub gate's OWN unit tests: each asserts a class is caught, which it can only do by containing one. Same shape as the tests/test_outbox.py row.
+- `tests/test_scrub.py`:122 **[credential]** — the scrub gate's OWN unit tests: each asserts a class is caught, which it can only do by containing one. Same shape as the tests/test_outbox.py row.
+- `tests/test_scrub.py`:127 **[private-ip]** — the scrub gate's OWN unit tests: each asserts a class is caught, which it can only do by containing one. Same shape as the tests/test_outbox.py row.
+- `tests/test_scrub.py`:128 **[private-ip]** — the scrub gate's OWN unit tests: each asserts a class is caught, which it can only do by containing one. Same shape as the tests/test_outbox.py row.
+- `users/operator/profile.md`:5 **[operator-preference]** — the blank profile shipped from the kit template; it states no preference
+
+## Findings
+
+None. Both gates passed: `curate/scrub.py`'s nine known-shape classes and this tool's own classes (identity: `member-name`, `descriptive-marker`, `home-path`, `email`, `private-account`; disclosure: `network-topology`, `operator-availability`, `operator-preference`, `identity-arrangement`), and `doc-script-not-executable`: every shell script a published doc tells a reader to run directly is executable.
+
+A clean run is not the same as proven harmless — it means no KNOWN shape matched. The cold auditor session is what turns that into a claim.

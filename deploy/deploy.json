@@ -1,0 +1,54 @@
+{
+  "contract_version": 1,
+  "system": "federation",
+  "units": [
+    "com.federation.deploy-sweep",
+    "com.federation.mail-poller",
+    "com.federation.adopt-runner",
+    "com.federation.gate-inputs"
+  ],
+  "restart": "none",
+  "deps": {
+    "kind": "none"
+  },
+  "state": [
+    {
+      "path": "reconcile-roots.local",
+      "required": true
+    },
+    {
+      "path": "repo-paths.local",
+      "required": true
+    },
+    {
+      "path": "deploy/seed-paths.local.json",
+      "required": true
+    }
+  ],
+  "smoke": {
+    "cmd": [
+      "python3",
+      "curate/distill.py",
+      "--check"
+    ],
+    "timeout_seconds": 120
+  },
+  "verify": {
+    "cmd": [
+      "python3",
+      "deploy/runner.py",
+      "--help"
+    ],
+    "timeout_seconds": 60,
+    "settle_seconds": 0
+  },
+  "apply": {
+    "cmd": [
+      "python3",
+      "deploy/migrate.py",
+      "prepare",
+      "--hold-on-refusal"
+    ],
+    "timeout_seconds": 1800
+  }
+}

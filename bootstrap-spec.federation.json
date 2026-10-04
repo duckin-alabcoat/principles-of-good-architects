@@ -1,0 +1,19 @@
+{
+  "//": [
+    "The federation's own lifecycle spec (ADR-0061 D1) — the shared input `poga bootstrap` and `poga restore` both read. Referenced by state-manifest.federation.json's `spec` field, which named this file before it existed (gap found session 90).",
+    "RESTORE-ONLY. `bootstrappable: false` because the federation repo already exists and its role doc, ADRs, and registries are AUTHORED artifacts carried in git history — they are not rendered from the bootstrap kit. `poga bootstrap --spec` on this file is refused; `poga restore federation` is the valid verb.",
+    "`repo_url` + `root_commit` are the D4 finding-9 identity pin: verified after clone, BEFORE anything else happens, so a restore can never rebuild the federation from the public sanitized sibling repo. The root commit is immutable — it is the strongest available identity for a repo whose name and remote can both change.",
+    "`install_dir` is this machine's view; `canonical_install_dir` is the /Users view used for declarations. Both are DEFAULTS — `poga restore --into <path>` overrides them, which is how a restore onto a fresh machine with a different account resolves (never a hardcoded home; state-manifest.schema.json rejects one in `dest`)."
+  ],
+  "system_name": "Federation",
+  "bootstrappable": false,
+  "user_id": "operator",
+  "user_name": "the operator",
+  
+  "repo_name": "principles-of-good-architects",
+  "repo_url": "https://github.com/duckin-alabcoat/principles-of-good-architects.git",
+  "root_commit": null,
+  "install_dir": "~/principles-of-good-architects",
+  "canonical_install_dir": "~/principles-of-good-architects",
+  "federation_repo_url": "https://github.com/duckin-alabcoat/principles-of-good-architects/blob/main"
+}

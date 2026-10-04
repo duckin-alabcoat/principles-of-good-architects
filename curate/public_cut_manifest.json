@@ -1,0 +1,813 @@
+{
+  "manifest_version": 1,
+  "include": [
+    {
+      "path": "adr",
+      "why": "the decision record -- the doctrine's reasoning, and the reason the system is legible"
+    },
+    {
+      "path": "principles",
+      "why": "the principles registry, canon"
+    },
+    {
+      "path": "habits",
+      "why": "the universal habits registry, canon"
+    },
+    {
+      "path": "sessionlib",
+      "why": "the harness the doctrine runs on"
+    },
+    {
+      "path": "curate",
+      "why": "the curation and gate tooling, including this tool and this manifest"
+    },
+    {
+      "path": "deploy",
+      "why": "the deployment machinery"
+    },
+    {
+      "path": "tests",
+      "why": "the suite -- a governed lifecycle that ships no tests is a claim, not a demonstration"
+    },
+    {
+      "path": "bootstrap-kit",
+      "why": "ships as a new adopter would receive it"
+    },
+    {
+      "path": "specs",
+      "why": "the written specifications"
+    },
+    {
+      "path": "design",
+      "why": "design notes"
+    },
+    {
+      "path": "PROCESS.md",
+      "why": "the onboarding runbook"
+    },
+    {
+      "path": "CLAUDE.md",
+      "why": "the runtime entry point"
+    },
+    {
+      "path": "federation-arch.md",
+      "why": "the reference role doc"
+    },
+    {
+      "path": "STANDARD.md",
+      "why": "the generated standard section"
+    },
+    {
+      "path": "STANDARD-REFERENCE.md",
+      "why": "the standard's reference material"
+    },
+    {
+      "path": "CANON.md",
+      "why": "the generated canon digest"
+    },
+    {
+      "path": "session.py",
+      "why": "the harness entry point"
+    },
+    {
+      "path": "poga_cli.py",
+      "why": "the CLI entry point"
+    },
+    {
+      "path": ".claude/settings.json",
+      "why": "settings ONLY -- named as a single file, never the .claude/ tree, which in this repo also holds worktrees/ (every live lane)"
+    },
+    {
+      "path": "README.md",
+      "why": "REWRITTEN by the brief's third item -- first line is the problem phrase, not the project name"
+    },
+    {
+      "path": "AGENTS.md",
+      "why": "NEW, authored by the brief's third item -- the front door for any runtime honouring the convention"
+    },
+    {
+      "path": "LICENSE",
+      "why": "NEW, Apache-2.0 -- authored by the brief's third item"
+    },
+    {
+      "path": "NOTICE",
+      "why": "NEW -- authored by the brief's third item"
+    },
+    {
+      "path": "poga",
+      "why": "the launcher every session and lane starts from"
+    },
+    {
+      "path": "interpreter.py",
+      "why": "the harness's interpreter resolver"
+    },
+    {
+      "path": "poga_evidence.py",
+      "why": "the evidence helpers the harness imports"
+    },
+    {
+      "path": "bootstrap.py",
+      "why": "the installer that stands up a new Architect"
+    },
+    {
+      "path": "session.config.json",
+      "why": "the harness's own configuration -- behaviour, not data"
+    },
+    {
+      "path": "standard-source.md",
+      "why": "the source STANDARD.md is generated from"
+    },
+    {
+      "path": "standard-settings.json",
+      "why": "the standard settings the substrate installs"
+    },
+    {
+      "path": "standard_check.py",
+      "why": "the standard conformance checker"
+    },
+    {
+      "path": "standard-capabilities.json",
+      "why": "the versioned capability description the conformance checker detects against"
+    },
+    {
+      "path": "state-manifest.md",
+      "why": "the state-manifest doctrine"
+    },
+    {
+      "path": "state-manifest.schema.json",
+      "why": "the state-manifest schema"
+    },
+    {
+      "path": "credentials-manifest.schema.json",
+      "why": "the credentials-manifest schema; the schema forbids a value field"
+    },
+    {
+      "path": "bootstrap-spec.example.json",
+      "why": "a synthetic bootstrap spec: the template PROCESS.md links for a new adopter"
+    },
+    {
+      "path": "bootstrap-spec.federation.json",
+      "why": "POGA's own bootstrap spec"
+    },
+    {
+      "path": "fleet-cadence.json",
+      "why": "the fleet cadence configuration"
+    },
+    {
+      "path": "poga.local.example",
+      "why": "the example machine-local launcher config"
+    },
+    {
+      "path": "reconcile-roots.example",
+      "why": "the example reconcile roots file"
+    },
+    {
+      "path": "repo-paths.example",
+      "why": "the example repo paths file"
+    },
+    {
+      "path": "POGA-OVERVIEW-AND-SCALABILITY.md",
+      "why": "the substrate overview curate/check_substrate_docs.py reads -- a gate step fails without it (WI-0383 audit). Point-in-time; the ADRs are the record."
+    },
+    {
+      "path": "examples",
+      "why": "a FICTIONAL multi-machine installation the README links: it illustrates the advanced case, it is not the spec, and every name in it is invented (WI-0454)"
+    },
+    {
+      "path": "docs",
+      "why": "the reader's guides: the first task walked end to end, and how the configuration fits together (external review 2026-09-30)"
+    },
+    {
+      "path": "CONTRIBUTING.md",
+      "why": "how an outside reader reports a problem or proposes a change to the public copy (external review 2026-09-30)"
+    },
+    {
+      "path": "CHANGELOG.md",
+      "why": "the public change history, so a reader can see what each published version changed (external review 2026-09-30)"
+    }
+  ],
+  "exclude": [
+    {
+      "path": "portfolio.md",
+      "ships": "public-overlay",
+      "why": "the roster IS the member list, and its prose describes the members (residency, sources, relations) as surely as its rows name them. Ships ONLY as the authored template at public-overlay/portfolio.md (see `replace`); the row-stripped shell left that prose behind (consultant brief 2026-09-27, item 2). The member-name class still reads the REAL roster from the root."
+    },
+    {
+      "path": "deploy/registry.json",
+      "ships": "registry-self-row-only",
+      "why": "names every member system's git remote. Ships with the `self` row alone, which is POGA deploying itself."
+    },
+    {
+      "path": "mailboxes.json",
+      "ships": "empty-mailboxes",
+      "why": "the mailbox list is a member list with machine residency attached. Ships structurally valid and empty."
+    },
+    {
+      "path": "users",
+      "ships": "blank-operator-profile",
+      "why": "the operator's profile is the most personal data in the repo. Ships as ONE blank users/operator/profile.md from the kit template (WI-0383).",
+      "ships_from": "bootstrap-kit/user-profile-template.md",
+      "ships_to": "users/operator/profile.md"
+    },
+    {
+      "path": "comms",
+      "ships": null,
+      "why": "agent-to-operator notes about live member systems"
+    },
+    {
+      "path": "outbox",
+      "ships": null,
+      "why": "outbound member mail"
+    },
+    {
+      "path": "proposed-edits",
+      "ships": null,
+      "why": "member briefs, all four states -- pending, accepted, applied, rejected"
+    },
+    {
+      "path": "inputs",
+      "ships": null,
+      "why": "mirrored member producer files. Absent from this tree today; named anyway, because an exclude that only lists what happens to exist is not a boundary."
+    },
+    {
+      "path": "sessions",
+      "ships": null,
+      "why": "session journals -- the working record, sampled rather than shipped whole"
+    },
+    {
+      "path": "(a withheld file)",
+      "ships": null,
+      "why": "withheld from this copy"
+    },
+    {
+      "path": "session-handoff-archive",
+      "ships": null,
+      "why": "the same, historically"
+    },
+    {
+      "path": "work-items",
+      "ships": null,
+      "why": "the live backlog, sampled rather than shipped whole"
+    },
+    {
+      "path": "ops-items",
+      "ships": null,
+      "why": "the live obligations, sampled rather than shipped whole"
+    },
+    {
+      "path": "curate-runs",
+      "ships": null,
+      "why": "curate run records over member producer files. Absent today; named anyway."
+    },
+    {
+      "path": "audits",
+      "ships": null,
+      "why": "audit reports naming member systems"
+    },
+    {
+      "path": "drills",
+      "ships": null,
+      "why": "drill records against live members"
+    },
+    {
+      "path": "restore",
+      "ships": null,
+      "why": "restore state"
+    },
+    {
+      "path": "releases",
+      "ships": null,
+      "why": "internal release records"
+    },
+    {
+      "path": "proposals",
+      "ships": null,
+      "why": "in-flight proposals"
+    },
+    {
+      "path": "briefs",
+      "ships": null,
+      "why": "authored briefs about member systems"
+    },
+    {
+      "path": "(a withheld file)",
+      "ships": null,
+      "why": "withheld from this copy"
+    },
+    {
+      "path": ".claude/worktrees",
+      "ships": null,
+      "why": "EVERY LIVE LANE. Lives under .claude/, which is why .claude/ is included as one named file and never as a tree."
+    },
+    {
+      "path": "__pycache__",
+      "ships": null,
+      "why": "build artifact"
+    },
+    {
+      "path": "(a withheld file)",
+      "ships": null,
+      "why": "withheld from this copy"
+    },
+    {
+      "path": "retrofit-reports",
+      "ships": null,
+      "why": "per-member retrofit reports"
+    },
+    {
+      "path": "(a withheld file)",
+      "ships": null,
+      "why": "withheld from this copy"
+    },
+    {
+      "path": "(a withheld file)",
+      "ships": null,
+      "why": "withheld from this copy"
+    },
+    {
+      "path": "(a withheld file)",
+      "ships": null,
+      "why": "withheld from this copy"
+    },
+    {
+      "path": "(a withheld file)",
+      "ships": null,
+      "why": "withheld from this copy"
+    },
+    {
+      "path": "(a withheld file)",
+      "ships": null,
+      "why": "withheld from this copy"
+    },
+    {
+      "path": "(a withheld file)",
+      "ships": null,
+      "why": "a member system's bootstrap spec"
+    },
+    {
+      "path": "(a withheld file)",
+      "ships": null,
+      "why": "a member system's bootstrap spec"
+    },
+    {
+      "path": "(a withheld file)",
+      "ships": null,
+      "why": "withheld from this copy"
+    },
+    {
+      "path": "(a withheld file)",
+      "ships": null,
+      "why": "withheld from this copy"
+    },
+    {
+      "path": "(a withheld file)",
+      "ships": null,
+      "why": "withheld from this copy"
+    },
+    {
+      "path": "(a withheld file)",
+      "ships": null,
+      "why": "withheld from this copy"
+    },
+    {
+      "path": "(a withheld file)",
+      "ships": null,
+      "why": "withheld from this copy"
+    },
+    {
+      "path": "err",
+      "ships": null,
+      "why": "stray command output committed by accident"
+    },
+    {
+      "path": "curate/public_cut_manifest.json",
+      "ships": "manifest-public",
+      "why": "this boundary. Ships with its substitution table, protected phrases and extra names WITHHELD -- they name what they hide."
+    },
+    {
+      "path": ".gitignore",
+      "ships": "gitignore-public",
+      "why": "the data/system boundary. Ships with a re-include for each top-level path the cut publishes that the internal rules ignore."
+    },
+    {
+      "path": "(a withheld file)",
+      "ships": null,
+      "why": "withheld from this copy"
+    },
+    {
+      "path": "(a withheld file)",
+      "ships": null,
+      "why": "withheld from this copy"
+    },
+    {
+      "path": "(a withheld file)",
+      "ships": null,
+      "why": "withheld from this copy"
+    },
+    {
+      "path": "public-overlay",
+      "ships": null,
+      "why": "authored generic replacements. Never copied as a tree: each file ships only through a `replace` row, at the path that row names."
+    },
+    {
+      "path": "session.config.json",
+      "ships": "session-config-public",
+      "why": "the live config names the operator's time zone, machines and profile path, and its notes are his working history; the public copy is generated from it with those replaced (WI-0448)"
+    },
+    {
+      "path": "(a withheld file)",
+      "why": "withheld from this copy"
+    },
+    {
+      "path": "fleet-cadence.json",
+      "why": "every row but the federation's names a member and whether it is parked (WI-0448, cold audit round 1)",
+      "ships": "fleet-cadence-public"
+    },
+    {
+      "path": ".claude/settings.json",
+      "ships": "json-notes-stripped",
+      "why": "the generated settings carry the operator's working-history notes; the public copy is the same settings with every `//` note dropped (WI-0448, cold audit round 2)"
+    },
+    {
+      "path": "deploy/deploy.json",
+      "ships": "json-notes-stripped",
+      "why": "its notes are working history (WI-0448, cold audit round 4)"
+    },
+    {
+      "path": "(a withheld file)",
+      "why": "withheld from this copy"
+    },
+    {
+      "path": "(a withheld file)",
+      "why": "withheld from this copy"
+    },
+    {
+      "path": "(a withheld file)",
+      "why": "withheld from this copy (the operator's ruling, 2026-09-28)"
+    },
+    {
+      "path": "(a withheld file)",
+      "why": "withheld from this copy (the operator's ruling, 2026-09-28)"
+    },
+    {
+      "path": "(a withheld file)",
+      "why": "withheld from this copy (the operator's ruling, 2026-09-28)"
+    },
+    {
+      "path": "(a withheld file)",
+      "why": "withheld from this copy (the operator's ruling, 2026-09-28)"
+    },
+    {
+      "path": "(a withheld file)",
+      "why": "withheld from this copy"
+    },
+    {
+      "path": "(a withheld file)",
+      "why": "withheld from this copy"
+    },
+    {
+      "path": "(a withheld file)",
+      "why": "withheld from this copy"
+    }
+  ],
+  "exclude_suffixes": [
+    {
+      "suffix": ".log",
+      "why": "every log -- runtime noise that names hosts and paths"
+    },
+    {
+      "suffix": ".pyc",
+      "why": "build artifact"
+    },
+    {
+      "suffix": ".local",
+      "why": "machine-local config by convention"
+    }
+  ],
+  "exclude_glob": [
+    {
+      "glob": "*.local.json",
+      "why": "machine-local config"
+    },
+    {
+      "glob": "*.local.md",
+      "why": "machine-local working files"
+    },
+    {
+      "glob": "session-handoff*.md",
+      "why": "the brief names this as a glob, not a single file. ROOT ONLY: matched anywhere, it took bootstrap-kit/session-handoff-template.md, which bootstrap needs (WI-0383 audit).",
+      "root_only": true
+    }
+  ],
+  "sample": [
+    {
+      "from": "work-items/WI-0290-the-adr-counter-still-has-no-renumberer.md",
+      "to": "work-items/WI-0290-the-adr-counter-still-has-no-renumberer.md",
+      "why": "THE LOOP. A finding recorded 09-05; governed by ADR-0120 (decided in a lane under a standing delegation); built and landed 09-24 as b6d2292f; harvested into 7.6.0; deployed the same day. Item and every note"
+    },
+    {
+      "from": "releases/federation/7.6.0.md",
+      "to": "releases/federation/7.6.0.md",
+      "why": "THE LOOP, release: the record that harvested WI-0290 into a derived minor"
+    },
+    {
+      "from": "work-items/WI-0330-build-the-decisions-view-wi-0288-r3-5-th.md",
+      "to": "work-items/WI-0330-build-the-decisions-view-wi-0288-r3-5-th.md",
+      "why": "LIFECYCLE, build: the split-out decisions view, shipped in 7.1.0 with an eight-mutation sweep; closes WI-0288"
+    },
+    {
+      "from": "work-items/WI-0380-poga-work-status-refuses-done-to-open-an.md",
+      "to": "work-items/WI-0380-poga-work-status-refuses-done-to-open-an.md",
+      "why": "LIFECYCLE, enforcement: ADR-0139 made mechanical -- done-to-open is refused and the refusal prints the mint-fresh remedy"
+    },
+    {
+      "from": "work-items/WI-0356-a-land-behind-origin-proceeds-on-a-warni.md",
+      "to": "work-items/WI-0356-a-land-behind-origin-proceeds-on-a-warni.md",
+      "why": "LANDING: a land behind origin proceeded on a warning; now a gate, each state watched going red; includes a refused rollback and a stranded-lane disposition"
+    },
+    {
+      "from": "work-items/WI-0278-mid-session-escalations-have-no-durable.md",
+      "to": "work-items/WI-0278-mid-session-escalations-have-no-durable.md",
+      "why": "RECORD: mid-session escalations get a durable record, so the escalations metric counts what happened rather than what a session remembered"
+    },
+    {
+      "from": "work-items/WI-0427-a-land-is-a-merge-take-validation-off-th.md",
+      "to": "work-items/WI-0427-a-land-is-a-merge-take-validation-off-th.md",
+      "why": "BRIEF TO BUILD: a consultant brief taken to landed code -- a land is a merge, validation leaves the land path (ADR-0148)"
+    },
+    {
+      "from": "drills/runtime-acceptance.py",
+      "to": "drills/runtime-acceptance.py",
+      "why": "RUNTIMES: the drill that stamps a runtime record against a disposable repo"
+    },
+    {
+      "from": "drills/basic-acceptance.md",
+      "to": "drills/basic-acceptance.md",
+      "why": "BASIC ACCEPTANCE: the record the README's 'Try it' cites -- one project, one task through claim, checkpoint, resume, verify and land, a lesson reaching a second project, from a fresh export in a sandbox (WI-0455)"
+    },
+    {
+      "from": "drills/basic-acceptance.sh",
+      "to": "drills/basic-acceptance.sh",
+      "why": "BASIC ACCEPTANCE: the driver that reproduces that record from a fresh export (WI-0455)"
+    },
+    {
+      "from": "drills/first-task-live.md",
+      "to": "drills/first-task-live.md",
+      "why": "FIRST TASK, LIVE: the record of docs/first-task.md walked for real from a fresh export, so the guide's steps are evidence and not only instructions (external review 2026-09-30)"
+    }
+  ],
+  "replace": [],
+  "add": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "from": "public-overlay/.github/workflows/ci.yml",
+      "why": "the public copies run their own test suite on every push; the internal origin is a private repo that must run no Actions, so this file exists only in the public cuts (external review 2026-09-30)"
+    }
+  ],
+  "generalize": {
+    "roster_source": "portfolio.md",
+    "roster_exempt": [
+      "federation"
+    ],
+    "substitutions": [],
+    "protect": [],
+    "relabel": [],
+    "_withheld": "The substitution table and the protected phrases are withheld from the public cut: they name the members they exist to hide. A public run of this tool therefore substitutes nothing and relies on the scrub gate and the identity gate alone."
+  },
+  "identity_gate": {
+    "classes": [
+      {
+        "cls": "member-name",
+        "why": "a member project name survived the generalization table -- ruling 3 makes this a defect, and the surviving name proves the table incomplete"
+      },
+      {
+        "cls": "home-path",
+        "why": "an operator home path identifies a person and a machine"
+      },
+      {
+        "cls": "email",
+        "why": "an email address identifies a person; scrub.py has no email class"
+      },
+      {
+        "cls": "private-account",
+        "why": "a name of a withheld account survived"
+      },
+      {
+        "cls": "network-topology",
+        "why": "the prose describes a network or security posture"
+      },
+      {
+        "cls": "operator-availability",
+        "why": "the prose states the operator's whereabouts or availability"
+      },
+      {
+        "cls": "operator-preference",
+        "why": "the prose records a personal preference rather than doctrine"
+      }
+    ],
+    "email_pattern": "[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}",
+    "email_allow": [
+      "noreply@anthropic.com",
+      ".invalid",
+      ".example",
+      ".test",
+      ".localhost",
+      "@example.com",
+      "@example.org",
+      "@example.net"
+    ],
+    "home_path_patterns": [
+      "/Users/[A-Za-z0-9_-][A-Za-z0-9._-]*",
+      "/Volumes/[A-Za-z0-9_-][A-Za-z0-9._-]*"
+    ],
+    "home_path_allow": [
+      "/Users/<operator>",
+      "/Volumes/<operator>"
+    ],
+    "home_path_placeholder_segments": [
+      "alex",
+      "alice",
+      "bar",
+      "bob",
+      "carol",
+      "example",
+      "foo",
+      "home",
+      "name",
+      "nobody",
+      "operator",
+      "path",
+      "repo",
+      "some",
+      "somebody",
+      "someone",
+      "somepath",
+      "temp",
+      "test",
+      "tester",
+      "tmp",
+      "user",
+      "username",
+      "x",
+      "y",
+      "you"
+    ],
+    "extra_names": [],
+    "substring_names": [],
+    "descriptive_markers": [],
+    "public_identity": {
+      "repo": "duckin-alabcoat/principles-of-good-architects",
+      "email": "49006243+duckin-alabcoat@users.noreply.github.com",
+      "shield": [
+        "duckin-alabcoat/principles-of-good-architects",
+        "49006243+duckin-alabcoat@users.noreply.github.com"
+      ],
+      "why": "the account this copy is published under. These exact literals are the only spellings of it the cut carries."
+    },
+    "private_accounts": [],
+    "disclosure_classes": [],
+    "disclosure_exempt": []
+  },
+  "binary_suffixes": [
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".webp",
+    ".ico",
+    ".pdf",
+    ".zip",
+    ".gz",
+    ".tgz",
+    ".woff",
+    ".woff2",
+    ".ttf",
+    ".otf",
+    ".so",
+    ".dylib",
+    ".dll",
+    ".pyc"
+  ],
+  "gate_exempt": [
+    {
+      "path": "curate/scrub.py",
+      "classes": [
+        "private-ip",
+        "credential",
+        "wifi-secret",
+        "dob"
+      ],
+      "spans": [
+        "10\\.1\\.2\\.3",
+        "10\\.4\\.5\\.6",
+        "`192\\.168\\.0\\.0`",
+        "`api_key[ ]=`",
+        "api_key[ ]=[ ]sekrit12345",
+        "`psk[:]`",
+        "`date[ ]of[ ]birth`",
+        "\\?:date[ ]of[ ]birth\\|",
+        "\\\"a[ ]date[ ]of[ ]birth\\\""
+      ],
+      "why": "THE DETECTOR'S OWN SOURCE. This file IS the nine patterns, so it necessarily contains the shapes it matches -- its docstring even renders a masked example. A detector that cannot be published without tripping itself is not a leak."
+    },
+    {
+      "path": "tests/test_outbox.py",
+      "classes": [
+        "private-ip",
+        "credential"
+      ],
+      "spans": [
+        "192\\.168\\.44\\.7\\b",
+        "192\\.168\\.77\\.20\\b",
+        "api_key[ ]=[ ]sk-abcdef0123456789abcdef"
+      ],
+      "why": "the scrub gate's own tests. They assert that a LAN address and a credential assignment are REFUSED, which they can only do by containing one."
+    },
+    {
+      "path": "tests/test_production_mail_state.py",
+      "classes": [
+        "private-ip"
+      ],
+      "spans": [
+        "10\\.0\\.0\\.5\\b"
+      ],
+      "why": "asserts the mail queue refuses a payload carrying a LAN address; the fixture must carry one for the assertion to mean anything."
+    },
+    {
+      "path": "tests/test_scrub.py",
+      "classes": [
+        "private-ip",
+        "overlay-ip",
+        "mac-address",
+        "credential",
+        "ssn",
+        "phone",
+        "street-address",
+        "wifi-secret",
+        "dob"
+      ],
+      "spans": [
+        "192\\.168\\.4\\.(?:22|1)\\b",
+        "10\\.1\\.2\\.3",
+        "100\\.101\\.102\\.103",
+        "aa[:]bb[:]cc[:]dd[:]ee[:]ff",
+        "api_key[ ]=[ ]hunter2(?:hunter2)?",
+        "123[-]45[-]6789",
+        "[(]555[)] 555[-]0123",
+        "1234[ ]Maple[ ]Street",
+        "psk[:] correcthorsebattery",
+        "date[ ]of[ ]birth 1970-01-01"
+      ],
+      "why": "the scrub gate's OWN unit tests: each asserts a class is caught, which it can only do by containing one. Same shape as the tests/test_outbox.py row."
+    },
+    {
+      "path": "tests/test_diagnose.py",
+      "classes": [
+        "private-ip"
+      ],
+      "spans": [
+        "10\\.20\\.30\\.40"
+      ],
+      "why": "asserts the diagnosis redactor removes a LAN address from a log tail; the fixture must carry one."
+    },
+    {
+      "path": "tests/test_mailtransport.py",
+      "classes": [
+        "private-ip"
+      ],
+      "spans": [
+        "192\\.168\\.44\\.7\\b"
+      ],
+      "why": "asserts the mail worker's second gate refuses a LAN address that skipped the first; the fixture must carry one."
+    },
+    {
+      "path": "adr/0141-diagnosis-is-a-read-only-collector-that-publishes-on-a-state-change.md",
+      "classes": [
+        "private-ip",
+        "credential",
+        "wifi-secret",
+        "dob"
+      ],
+      "spans": [
+        "`10\\.1\\.2\\.3`",
+        "`10\\.4\\.5\\.6`",
+        "`192\\.168\\.0\\.0`",
+        "`api_key[ ]=`",
+        "`api_key[ ]=[ ]hunter2hunter2`",
+        "`psk[:]`",
+        "`date[ ]of[ ]birth`"
+      ],
+      "why": "the decision record for the redactor and for two defects in scrub.py's own patterns (D4, D7). It quotes the shapes the patterns match -- fake values, never real ones -- because the defects cannot be stated without them."
+    }
+  ],
+  "sample_rules": {
+    "allowed_kinds": [
+      "host",
+      "operator-path",
+      "relabel"
+    ],
+    "why": "a sample is POGA's own record, so the only rewriting it may need is the machine and operator-path pass every file gets; a member substitution means the candidate carried a member trace and was the wrong pick"
+  },
+  "rename": [],
+  "_withheld_rows": "The disclosure vocabulary, its exemptions, and the replace and rename rows are withheld from the public cut: they describe or point at what they exist to hide."
+}
